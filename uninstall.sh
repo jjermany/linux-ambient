@@ -25,6 +25,16 @@ systemctl daemon-reload
 echo "Removing main script..."
 rm -f /usr/local/bin/ambient_brightness.py
 
+# Remove GUI application
+echo "Removing GUI application..."
+rm -f /usr/local/bin/ambient-brightness-gui
+
+# Remove desktop entries
+echo "Removing desktop entries..."
+rm -f /usr/share/applications/ambient-brightness-settings.desktop
+rm -f /etc/xdg/autostart/ambient-brightness-tray.desktop
+update-desktop-database /usr/share/applications/ 2>/dev/null || true
+
 # Remove udev rules
 echo "Removing udev rules..."
 rm -f /etc/udev/rules.d/90-backlight.rules

@@ -4,7 +4,10 @@
 opencv-python>=4.5.0
 numpy>=1.19.0
 
+# GUI dependencies (required for ambient-brightness-gui)
+PyGObject>=3.30.0
+
 # Note: Consider using system packages instead of pip:
-# - Debian/Ubuntu: sudo apt install python3-opencv python3-numpy
-# - Fedora: sudo dnf install python3-opencv python3-numpy
-# - Arch: sudo pacman -S python-opencv python-numpy
+# - Debian/Ubuntu: sudo apt install python3-opencv python3-numpy python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1
+# - Fedora: sudo dnf install python3-opencv python3-numpy python3-gobject gtk3 libappindicator-gtk3
+# - Arch: sudo pacman -S python-opencv python-numpy python-gobject gtk3 libappindicator-gtk3
