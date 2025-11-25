@@ -1,0 +1,10 @@
+# Python dependencies for Ambient Brightness Control
+
+# Optional: Only needed if using camera mode (fallback when no ALS is available)
+opencv-python>=4.5.0
+numpy>=1.19.0
+
+# Note: Consider using system packages instead of pip:
+# - Debian/Ubuntu: sudo apt install python3-opencv python3-numpy
+# - Fedora: sudo dnf install python3-opencv python3-numpy
+# - Arch: sudo pacman -S python-opencv python-numpy

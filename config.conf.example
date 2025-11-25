@@ -1,0 +1,21 @@
+# Ambient Brightness Control Configuration
+# Place this file at /etc/ambient-brightness/config.conf
+
+# Enable camera as fallback if no ambient light sensor is found
+enable_camera=true
+
+# Smoothing factor (0.0-1.0): Higher = faster changes, Lower = smoother transitions
+# Recommended: 0.2-0.4
+smoothing_factor=0.3
+
+# Update interval in seconds
+# Recommended: 1.0-3.0
+update_interval=2.0
+
+# Minimum brightness percentage (1-100)
+# Screen will never go below this level
+min_brightness=10
+
+# Maximum brightness percentage (1-100)
+# Screen will never go above this level
+max_brightness=100
