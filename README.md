@@ -5,14 +5,14 @@ Automatic screen brightness adjustment for Linux using ambient light sensors or 
 ## Quick Start
 
 ```bash
-# One-line install
-curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+# One-line install (no sudo required!)
+curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 
 # Then open the GUI
 ambient-brightness-gui
 ```
 
-That's it! The GUI will guide you through starting and configuring the service.
+That's it! **No password prompts needed** for normal operation. The GUI will guide you through starting and configuring the service.
 
 ## Features
 
@@ -23,8 +23,8 @@ That's it! The GUI will guide you through starting and configuring the service.
 - **Smooth Transitions**: Prevents jarring brightness changes with exponential smoothing
 - **Highly Configurable**: Adjust sensitivity, update rate, and brightness limits via GUI or config file
 - **Service Management**: Start/stop/restart service and view logs directly from GUI
-- **Lightweight**: Runs as a systemd service with minimal resource usage
-- **Secure**: Includes udev rules and PolicyKit integration for proper permission management
+- **Lightweight**: Runs as a user systemd service with minimal resource usage
+- **No Password Prompts**: User-level installation and operation, no root access needed after setup
 
 ## How It Works
 
@@ -49,7 +49,7 @@ That's it! The GUI will guide you through starting and configuring the service.
   - IIO subsystem (for ALS) or working webcam (for camera mode)
   - Backlight control (`/sys/class/backlight/`)
 - Python 3.6+
-- Root access for installation
+- One-time sudo access for udev rules setup (backlight permissions)
 
 ### Python Dependencies
 
@@ -68,86 +68,78 @@ Choose one of the following installation methods:
 Download and install automatically with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 ```
 
 Or with wget:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+wget -qO- https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 ```
 
-This will automatically:
+**No sudo required!** The installer will:
 - Clone the repository
-- Install all dependencies
-- Set up the service
+- Install Python dependencies to user directory
+- Set up user-level systemd service
 - Install the GUI application
 - Clean up temporary files
+- Prompt for sudo only for udev rules (backlight permissions)
 
-### Method 2: Standard Make Install (Recommended for Developers)
-
-If you've cloned or downloaded the repository:
-
-```bash
-git clone https://github.com/jjermany/linux-ambient.git
-cd linux-ambient
-sudo make install
-```
-
-The Makefile supports standard targets:
-- `make help` - Show available targets
-- `make install` - Install everything
-- `make uninstall` - Remove everything
-- `make install-deps` - Install dependencies only
-
-### Method 3: Using Install Script
+### Method 2: Using Install Script (Recommended for Developers)
 
 After cloning/downloading the repository:
 
 ```bash
+git clone https://github.com/jjermany/linux-ambient.git
 cd linux-ambient
-sudo ./install.sh
+./install.sh
 ```
 
 This script will:
-- Install Python and GTK dependencies
-- Copy scripts to `/usr/local/bin/`
-- Set up configuration in `/etc/ambient-brightness/`
-- Create udev rules for brightness control
-- Install systemd service
+- Install Python dependencies
+- Copy scripts to `~/.local/bin/`
+- Set up configuration in `~/.config/ambient-brightness/`
+- Install user systemd service
 - Add GUI desktop entries
+- Optionally set up udev rules (requires sudo)
 
-### Method 4: Manual Installation
+### Method 3: Manual Installation
 
 For complete control over the installation process:
 
-1. **Install dependencies**:
+1. **Install system dependencies** (one-time, requires sudo):
 ```bash
 # Debian/Ubuntu
-sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 python3-opencv python3-numpy
+sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1
 
 # Fedora
-sudo dnf install python3-gobject gtk3 libappindicator-gtk3 python3-opencv python3-numpy
+sudo dnf install python3-gobject gtk3 libappindicator-gtk3
 
 # Arch Linux
-sudo pacman -S python-gobject gtk3 libappindicator-gtk3 python-opencv python-numpy
+sudo pacman -S python-gobject gtk3 libappindicator-gtk3
 ```
 
-2. **Copy scripts**:
+2. **Install Python dependencies** (no sudo needed):
 ```bash
-sudo cp ambient_brightness.py /usr/local/bin/
-sudo cp ambient_brightness_gui.py /usr/local/bin/ambient-brightness-gui
-sudo chmod +x /usr/local/bin/ambient_brightness.py
-sudo chmod +x /usr/local/bin/ambient-brightness-gui
+pip3 install --user opencv-python numpy
 ```
 
-3. **Create configuration**:
+3. **Copy scripts to user directory**:
 ```bash
-sudo mkdir -p /etc/ambient-brightness
-sudo cp config.conf.example /etc/ambient-brightness/config.conf
+mkdir -p ~/.local/bin
+cp ambient_brightness.py ~/.local/bin/
+cp ambient_brightness_gui.py ~/.local/bin/ambient-brightness-gui
+chmod +x ~/.local/bin/ambient_brightness.py
+chmod +x ~/.local/bin/ambient-brightness-gui
 ```
 
-4. **Set up udev rules**:
+4. **Create user configuration**:
+```bash
+mkdir -p ~/.config/ambient-brightness
+cp config.conf.example ~/.config/ambient-brightness/config.conf
+```
+
+5. **Set up udev rules** (one-time, requires sudo):
 ```bash
 sudo tee /etc/udev/rules.d/90-backlight.rules << 'EOF'
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
@@ -156,19 +148,23 @@ EOF
 
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=backlight
+sudo usermod -aG video $USER  # Add yourself to video group
+# Log out and back in for group changes to take effect
 ```
 
-5. **Install systemd service**:
+6. **Install user systemd service**:
 ```bash
-sudo cp ambient-brightness.service /etc/systemd/system/
-sudo systemctl daemon-reload
+mkdir -p ~/.config/systemd/user
+cp ambient-brightness.service ~/.config/systemd/user/
+systemctl --user daemon-reload
 ```
 
-6. **Install desktop entries**:
+7. **Install desktop entries**:
 ```bash
-sudo cp ambient-brightness-settings.desktop /usr/share/applications/
-sudo cp ambient-brightness-tray.desktop /etc/xdg/autostart/
-sudo update-desktop-database /usr/share/applications/
+mkdir -p ~/.local/share/applications ~/.config/autostart
+cp ambient-brightness-settings.desktop ~/.local/share/applications/
+cp ambient-brightness-tray.desktop ~/.config/autostart/
+update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
 ```
 
 ## Usage
@@ -224,40 +220,40 @@ rm ~/.config/autostart/ambient-brightness-tray.desktop
 
 ### Command Line Usage
 
-You can also manage the service via command line:
+You can also manage the service via command line (**no sudo needed!**):
 
 #### Start the Service
 
 ```bash
-sudo systemctl start ambient-brightness
+systemctl --user start ambient-brightness
 ```
 
 ### Enable at Boot
 
 ```bash
-sudo systemctl enable ambient-brightness
+systemctl --user enable ambient-brightness
 ```
 
 ### Check Status
 
 ```bash
-sudo systemctl status ambient-brightness
+systemctl --user status ambient-brightness
 ```
 
 ### View Logs
 
 ```bash
 # Follow live logs
-sudo journalctl -u ambient-brightness -f
+journalctl --user -u ambient-brightness -f
 
 # View recent logs
-sudo journalctl -u ambient-brightness -n 50
+journalctl --user -u ambient-brightness -n 50
 ```
 
 #### Stop the Service
 
 ```bash
-sudo systemctl stop ambient-brightness
+systemctl --user stop ambient-brightness
 ```
 
 ## Configuration
@@ -274,7 +270,7 @@ Use the Settings tab in the GUI application to adjust all configuration options 
 
 ### Via Config File
 
-Alternatively, edit `/etc/ambient-brightness/config.conf`:
+Alternatively, edit `~/.config/ambient-brightness/config.conf`:
 
 ```ini
 # Enable camera as fallback (true/false)
@@ -296,7 +292,7 @@ max_brightness=100
 
 After changing configuration, restart the service:
 ```bash
-sudo systemctl restart ambient-brightness
+systemctl --user restart ambient-brightness
 ```
 
 ## Testing
@@ -328,7 +324,7 @@ cat /sys/class/backlight/*/max_brightness
 
 ```bash
 # Run in foreground with debug output
-sudo python3 ambient_brightness.py
+~/.local/bin/ambient_brightness.py
 ```
 
 ## Troubleshooting
@@ -351,13 +347,13 @@ If you get permission errors:
 
 ```bash
 # Check detailed error logs
-sudo journalctl -u ambient-brightness -xe
+journalctl --user -u ambient-brightness -xe
 
 # Verify Python script is executable
-ls -l /usr/local/bin/ambient_brightness.py
+ls -l ~/.local/bin/ambient_brightness.py
 
 # Test script manually
-sudo /usr/local/bin/ambient_brightness.py
+~/.local/bin/ambient_brightness.py
 ```
 
 ### Brightness Changes Too Fast/Slow
@@ -382,10 +378,10 @@ sudo dnf install python3-gobject gtk3 libappindicator-gtk3  # Fedora
 
 ### Settings Won't Save
 
-If you get permission errors when saving settings:
-- The GUI uses PolicyKit (pkexec) to save with elevated privileges
-- Ensure PolicyKit is installed and running
-- Check `/etc/ambient-brightness/` directory permissions
+If settings fail to save:
+- Check that `~/.config/ambient-brightness/` directory exists and is writable
+- Ensure you have write permissions to your home directory
+- Check available disk space
 
 ### Camera Not Working
 
@@ -399,29 +395,31 @@ ls -la /dev/video*
 
 ## Uninstallation
 
-### Using Make (Recommended)
+To remove the application:
 
 ```bash
-cd linux-ambient
-sudo make uninstall
+# Stop and disable the service
+systemctl --user stop ambient-brightness
+systemctl --user disable ambient-brightness
+
+# Remove installed files
+rm -rf ~/.local/bin/ambient_brightness.py
+rm -rf ~/.local/bin/ambient-brightness-gui
+rm -rf ~/.config/systemd/user/ambient-brightness.service
+rm -rf ~/.local/share/applications/ambient-brightness-settings.desktop
+rm -rf ~/.config/autostart/ambient-brightness-tray.desktop
+
+# Reload systemd
+systemctl --user daemon-reload
+
+# Optional: Remove configuration and data
+rm -rf ~/.config/ambient-brightness
 ```
 
-### Using Uninstall Script
-
+To remove udev rules (requires sudo):
 ```bash
-cd linux-ambient
-sudo ./uninstall.sh
-```
-
-Both methods will:
-- Stop and disable the service
-- Remove all installed files
-- Remove desktop entries
-- Ask before removing configuration
-
-To completely remove including configuration:
-```bash
-sudo rm -rf /etc/ambient-brightness
+sudo rm -f /etc/udev/rules.d/90-backlight.rules
+sudo udevadm control --reload-rules
 ```
 
 ## Architecture
@@ -464,13 +462,14 @@ sudo rm -rf /etc/ambient-brightness
 ┌──────▼──────┐  ┌──────▼──────┐   │
 │   Settings  │  │   Service   │   │
 │   Window    │  │   Control   │   │
-│  (3 Tabs)   │  │  (systemd)  │   │
+│  (3 Tabs)   │  │  (systemd   │   │
+│             │  │    --user)  │   │
 └──────┬──────┘  └──────┬──────┘   │
        │                 │          │
        │          ┌──────▼──────┐   │
        │          │   Config    │   │
        │          │  Manager    │   │
-       │          │  (pkexec)   │   │
+       │          │  (~/.config)│   │
        │          └─────────────┘   │
        │                            │
 ┌──────▼────────────────────────────▼───┐

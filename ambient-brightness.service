@@ -1,19 +1,12 @@
 [Unit]
 Description=Ambient Brightness Control Service
-After=multi-user.target
 Documentation=https://github.com/jjermany/linux-ambient
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/local/bin/ambient_brightness.py
+ExecStart=%h/.local/bin/ambient_brightness.py
 Restart=on-failure
 RestartSec=5s
-StandardOutput=journal
-StandardError=journal
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

@@ -385,8 +385,8 @@ def load_config() -> dict:
         'max_brightness': 100,
     }
 
-    # TODO: Load from config file if exists
-    config_file = Path('/etc/ambient-brightness/config.conf')
+    # Load from user config file if exists
+    config_file = Path.home() / '.config' / 'ambient-brightness' / 'config.conf'
     if config_file.exists():
         # Simple key=value parser
         try:
