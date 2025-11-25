@@ -1,54 +1,48 @@
 #!/bin/bash
-# Uninstallation script for Ambient Brightness Control
-
-set -e
+# Uninstallation script for Ambient Brightness Control (user-level)
 
 echo "Uninstalling Ambient Brightness Control..."
+echo ""
 
-# Check for root
-if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo)"
-    exit 1
-fi
-
-# Stop and disable service
+# Stop and disable the user service
 echo "Stopping service..."
-systemctl stop ambient-brightness 2>/dev/null || true
-systemctl disable ambient-brightness 2>/dev/null || true
+systemctl --user stop ambient-brightness 2>/dev/null || true
+systemctl --user disable ambient-brightness 2>/dev/null || true
 
-# Remove systemd service
+# Remove user service file
 echo "Removing systemd service..."
-rm -f /etc/systemd/system/ambient-brightness.service
-systemctl daemon-reload
+rm -f ~/.config/systemd/user/ambient-brightness.service
+systemctl --user daemon-reload
 
-# Remove main script
-echo "Removing main script..."
-rm -f /usr/local/bin/ambient_brightness.py
-
-# Remove GUI application
-echo "Removing GUI application..."
-rm -f /usr/local/bin/ambient-brightness-gui
+# Remove scripts
+echo "Removing scripts..."
+rm -f ~/.local/bin/ambient_brightness.py
+rm -f ~/.local/bin/ambient-brightness-gui
 
 # Remove desktop entries
 echo "Removing desktop entries..."
-rm -f /usr/share/applications/ambient-brightness-settings.desktop
-rm -f /etc/xdg/autostart/ambient-brightness-tray.desktop
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
+rm -f ~/.local/share/applications/ambient-brightness-settings.desktop
+rm -f ~/.config/autostart/ambient-brightness-tray.desktop
+update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
 
-# Remove udev rules
-echo "Removing udev rules..."
-rm -f /etc/udev/rules.d/90-backlight.rules
-udevadm control --reload-rules
-
-# Ask about config
-read -p "Remove configuration directory /etc/ambient-brightness? (y/N) " -n 1 -r
+# Ask about configuration
+echo ""
+read -p "Remove configuration files from ~/.config/ambient-brightness? [y/N] " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf /etc/ambient-brightness
+    rm -rf ~/.config/ambient-brightness
     echo "Configuration removed."
 else
-    echo "Configuration kept."
+    echo "Configuration kept at ~/.config/ambient-brightness/"
 fi
 
 echo ""
+echo "========================================="
 echo "Uninstallation complete!"
+echo "========================================="
+echo ""
+echo "Note: System-level udev rules (if installed) were not removed."
+echo "To remove them manually (requires sudo):"
+echo "  sudo rm -f /etc/udev/rules.d/90-backlight.rules"
+echo "  sudo udevadm control --reload-rules"
+echo ""
