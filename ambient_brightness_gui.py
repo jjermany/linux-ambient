@@ -155,7 +155,12 @@ class ServiceControl:
                 text=True,
                 timeout=2
             )
-            # systemd is available if command succeeds
+            # Check both return code and output
+            # "offline" or "unknown" means systemd user services are not available
+            output = result.stdout.strip().lower()
+            if output in ['offline', 'unknown']:
+                return False
+            # systemd is available if state is running, degraded, or similar
             return result.returncode in [0, 1]  # 0 = running, 1 = degraded but working
         except:
             return False
