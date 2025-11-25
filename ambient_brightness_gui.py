@@ -19,10 +19,59 @@ from typing import Optional, Dict
 
 CONFIG_FILE = '/etc/ambient-brightness/config.conf'
 SOCKET_PATH = '/tmp/ambient-brightness.sock'
+GUI_CONFIG_DIR = Path.home() / '.config' / 'ambient-brightness'
+GUI_CONFIG_FILE = GUI_CONFIG_DIR / 'gui.conf'
 
 
 class ConfigManager:
     """Manages configuration file reading/writing"""
+
+    @staticmethod
+    def load_gui_config() -> Dict:
+        """Load GUI-specific configuration"""
+        config = {
+            'show_system_tray': False,
+        }
+
+        if not GUI_CONFIG_FILE.exists():
+            return config
+
+        try:
+            for line in GUI_CONFIG_FILE.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+
+                    if key in ['show_system_tray']:
+                        config[key] = value.lower() in ['true', '1', 'yes']
+        except Exception as e:
+            print(f"Error loading GUI config: {e}")
+
+        return config
+
+    @staticmethod
+    def save_gui_config(config: Dict) -> bool:
+        """Save GUI-specific configuration"""
+        try:
+            # Ensure config directory exists
+            GUI_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Generate config content
+            content = "# Ambient Brightness GUI Configuration\n\n"
+            for key, value in config.items():
+                if isinstance(value, bool):
+                    content += f"{key}={'true' if value else 'false'}\n"
+                else:
+                    content += f"{key}={value}\n"
+
+            GUI_CONFIG_FILE.write_text(content)
+            return True
+
+        except Exception as e:
+            print(f"Error saving GUI config: {e}")
+            return False
 
     @staticmethod
     def load_config() -> Dict:
@@ -243,6 +292,7 @@ class SettingsWindow(Gtk.Window):
 
         # Load current config
         self.config = ConfigManager.load_config()
+        self.gui_config = ConfigManager.load_gui_config()
         self.service_control = ServiceControl()
         self.status_monitor = StatusMonitor()
 
@@ -350,6 +400,22 @@ class SettingsWindow(Gtk.Window):
         """Create settings configuration tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
+
+        # GUI settings
+        gui_frame = Gtk.Frame(label="GUI Settings")
+        gui_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        gui_box.set_border_width(10)
+        gui_frame.add(gui_box)
+        box.pack_start(gui_frame, False, False, 0)
+
+        self.tray_check = Gtk.CheckButton(label="Show system tray icon")
+        self.tray_check.set_active(self.gui_config['show_system_tray'])
+        gui_box.pack_start(self.tray_check, False, False, 0)
+
+        tray_hint = Gtk.Label()
+        tray_hint.set_markup("<small>System tray provides quick access to controls</small>")
+        tray_hint.set_xalign(0)
+        gui_box.pack_start(tray_hint, False, False, 0)
 
         # Sensor settings
         sensor_frame = Gtk.Frame(label="Sensor Settings")
@@ -551,8 +617,14 @@ class SettingsWindow(Gtk.Window):
         self.config['min_brightness'] = int(self.min_brightness_scale.get_value())
         self.config['max_brightness'] = int(self.max_brightness_scale.get_value())
 
-        # Save to file
-        if ConfigManager.save_config(self.config):
+        # Get GUI settings
+        self.gui_config['show_system_tray'] = self.tray_check.get_active()
+
+        # Save both configs
+        service_saved = ConfigManager.save_config(self.config)
+        gui_saved = ConfigManager.save_gui_config(self.gui_config)
+
+        if service_saved and gui_saved:
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
@@ -574,7 +646,13 @@ class SettingsWindow(Gtk.Window):
                 buttons=Gtk.ButtonsType.OK,
                 text="Error Saving Settings"
             )
-            dialog.format_secondary_text("Failed to save configuration file.")
+            if not service_saved and not gui_saved:
+                msg = "Failed to save configuration files."
+            elif not service_saved:
+                msg = "Failed to save service configuration."
+            else:
+                msg = "Failed to save GUI configuration."
+            dialog.format_secondary_text(msg)
             dialog.run()
             dialog.destroy()
 

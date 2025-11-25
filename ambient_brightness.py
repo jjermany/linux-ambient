@@ -352,7 +352,7 @@ class AmbientBrightnessService:
                     # Update if changed significantly
                     if current_brightness is None or abs(smooth_brightness - current_brightness) >= 1:
                         if self.brightness_controller.set_brightness(smooth_brightness):
-                            logger.debug(f"Light: {light_level:.1f}% -> Brightness: {smooth_brightness}%")
+                            logger.info(f"Light: {light_level:.1f}% -> Brightness: {smooth_brightness}%")
                             current_brightness = smooth_brightness
 
                 # Sleep until next update
