@@ -5,7 +5,7 @@ Automatic screen brightness adjustment for Linux using ambient light sensors or 
 ## Quick Start
 
 ```bash
-# One-line install (no sudo required!)
+# One-line install
 curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 
 # Then open the GUI
@@ -77,31 +77,32 @@ Or with wget:
 wget -qO- https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 ```
 
-**No sudo required!** The installer will:
+**Requires sudo.** The installer will:
 - Clone the repository
-- Install Python dependencies to user directory
-- Set up user-level systemd service
+- Install system dependencies
+- Install scripts to system directories
+- Set up systemd service
 - Install the GUI application
+- Configure udev rules for backlight permissions
 - Clean up temporary files
-- Prompt for sudo only for udev rules (backlight permissions)
 
-### Method 2: Using Install Script (Recommended for Developers)
+### Method 2: Using Makefile (Recommended for Developers)
 
 After cloning/downloading the repository:
 
 ```bash
 git clone https://github.com/jjermany/linux-ambient.git
 cd linux-ambient
-./install.sh
+sudo make install
 ```
 
-This script will:
-- Install Python dependencies
-- Copy scripts to `~/.local/bin/`
-- Set up configuration in `~/.config/ambient-brightness/`
-- Install user systemd service
+This will:
+- Install system dependencies
+- Copy scripts to `/usr/local/bin/`
+- Set up system configuration
+- Install systemd service
 - Add GUI desktop entries
-- Optionally set up udev rules (requires sudo)
+- Set up udev rules for backlight permissions
 
 ### Method 3: Manual Installation
 
