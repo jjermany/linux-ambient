@@ -332,6 +332,53 @@ cat /sys/class/backlight/*/max_brightness
 
 ## Troubleshooting
 
+### Service Fails to Start with "Unit not found" Errors
+
+If you see errors like:
+```
+Failed to start ambient-brightness.service: Unit ambient-brightness.service not found.
+```
+
+This usually means you're trying to manage a user service when it was installed system-wide, or vice versa. The installation method determines where the service is installed:
+
+- **System-wide installation** (via `sudo make install` or quick-install): Uses `sudo systemctl` (no `--user`)
+- **User installation** (via `install.sh` without sudo): Uses `systemctl --user`
+
+**Solution - Complete Cleanup and Reinstall:**
+
+1. **Run the cleanup script** to remove all versions:
+```bash
+cd linux-ambient
+chmod +x cleanup-old-install.sh
+./cleanup-old-install.sh
+```
+
+2. **Reinstall with the latest version**:
+```bash
+# Pull latest fixes
+git pull
+
+# For system-wide installation (recommended):
+sudo make install
+
+# Then manage with:
+sudo systemctl start ambient-brightness
+sudo systemctl enable ambient-brightness
+
+# OR for user installation:
+./install.sh
+
+# Then manage with:
+systemctl --user start ambient-brightness
+systemctl --user enable ambient-brightness
+```
+
+3. **Use the GUI (easiest)**:
+```bash
+ambient-brightness-gui
+```
+The GUI automatically detects your installation type and uses the correct commands.
+
 ### No Sensor Detected
 
 If you see "No sensors available":
