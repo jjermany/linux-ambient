@@ -17,7 +17,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Dict
 
-CONFIG_FILE = '/etc/ambient-brightness/config.conf'
+CONFIG_DIR = Path.home() / '.config' / 'ambient-brightness'
+CONFIG_FILE = CONFIG_DIR / 'config.conf'
 SOCKET_PATH = '/tmp/ambient-brightness.sock'
 GUI_CONFIG_DIR = Path.home() / '.config' / 'ambient-brightness'
 GUI_CONFIG_FILE = GUI_CONFIG_DIR / 'gui.conf'
@@ -110,12 +111,9 @@ class ConfigManager:
     def save_config(config: Dict) -> bool:
         """Save configuration to file"""
         try:
-            # Check if we have write permissions
+            # Ensure config directory exists
             config_path = Path(CONFIG_FILE)
-
-            if not config_path.parent.exists():
-                # Try to create directory with pkexec
-                subprocess.run(['pkexec', 'mkdir', '-p', str(config_path.parent)], check=True)
+            config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Generate config content
             content = "# Ambient Brightness Control Configuration\n"
@@ -127,21 +125,8 @@ class ConfigManager:
                 else:
                     content += f"{key}={value}\n"
 
-            # Write with pkexec if needed
-            if os.access(config_path.parent, os.W_OK):
-                config_path.write_text(content)
-            else:
-                # Use pkexec to write as root
-                proc = subprocess.Popen(
-                    ['pkexec', 'tee', str(config_path)],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                proc.communicate(input=content.encode())
-                if proc.returncode != 0:
-                    return False
-
+            # Write config file (no root needed!)
+            config_path.write_text(content)
             return True
 
         except Exception as e:
@@ -157,7 +142,7 @@ class ServiceControl:
         """Check if service is running"""
         try:
             result = subprocess.run(
-                ['systemctl', 'is-active', 'ambient-brightness'],
+                ['systemctl', '--user', 'is-active', 'ambient-brightness'],
                 capture_output=True,
                 text=True
             )
@@ -170,7 +155,7 @@ class ServiceControl:
         """Check if service is enabled"""
         try:
             result = subprocess.run(
-                ['systemctl', 'is-enabled', 'ambient-brightness'],
+                ['systemctl', '--user', 'is-enabled', 'ambient-brightness'],
                 capture_output=True,
                 text=True
             )
@@ -182,7 +167,7 @@ class ServiceControl:
     def start() -> bool:
         """Start the service"""
         try:
-            subprocess.run(['pkexec', 'systemctl', 'start', 'ambient-brightness'], check=True)
+            subprocess.run(['systemctl', '--user', 'start', 'ambient-brightness'], check=True)
             return True
         except:
             return False
@@ -191,7 +176,7 @@ class ServiceControl:
     def stop() -> bool:
         """Stop the service"""
         try:
-            subprocess.run(['pkexec', 'systemctl', 'stop', 'ambient-brightness'], check=True)
+            subprocess.run(['systemctl', '--user', 'stop', 'ambient-brightness'], check=True)
             return True
         except:
             return False
@@ -200,7 +185,7 @@ class ServiceControl:
     def restart() -> bool:
         """Restart the service"""
         try:
-            subprocess.run(['pkexec', 'systemctl', 'restart', 'ambient-brightness'], check=True)
+            subprocess.run(['systemctl', '--user', 'restart', 'ambient-brightness'], check=True)
             return True
         except:
             return False
@@ -209,7 +194,7 @@ class ServiceControl:
     def enable() -> bool:
         """Enable service at boot"""
         try:
-            subprocess.run(['pkexec', 'systemctl', 'enable', 'ambient-brightness'], check=True)
+            subprocess.run(['systemctl', '--user', 'enable', 'ambient-brightness'], check=True)
             return True
         except:
             return False
@@ -218,7 +203,7 @@ class ServiceControl:
     def disable() -> bool:
         """Disable service at boot"""
         try:
-            subprocess.run(['pkexec', 'systemctl', 'disable', 'ambient-brightness'], check=True)
+            subprocess.run(['systemctl', '--user', 'disable', 'ambient-brightness'], check=True)
             return True
         except:
             return False
@@ -237,7 +222,7 @@ class StatusMonitor:
         try:
             # Get recent service logs
             result = subprocess.run(
-                ['journalctl', '-u', 'ambient-brightness', '-n', '50', '--no-pager'],
+                ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '50', '--no-pager'],
                 capture_output=True,
                 text=True,
                 timeout=2
@@ -695,7 +680,7 @@ class SettingsWindow(Gtk.Window):
         """Refresh service logs"""
         try:
             result = subprocess.run(
-                ['journalctl', '-u', 'ambient-brightness', '-n', '100', '--no-pager'],
+                ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '100', '--no-pager'],
                 capture_output=True,
                 text=True,
                 timeout=5

@@ -5,70 +5,132 @@ set -e
 
 echo "Installing Ambient Brightness Control..."
 
-# Check for root
-if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo)"
-    exit 1
-fi
-
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip3 install opencv-python numpy 2>/dev/null || echo "Note: OpenCV installation may require system packages. Install python3-opencv via your package manager if needed."
+pip3 install --user opencv-python numpy 2>/dev/null || echo "Note: OpenCV installation may require system packages. Install python3-opencv via your package manager if needed."
 
-# Install GTK dependencies for GUI
-echo "Installing GUI dependencies..."
-apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 2>/dev/null || \
-dnf install -y python3-gobject gtk3 libappindicator-gtk3 2>/dev/null || \
-pacman -S --noconfirm python-gobject gtk3 libappindicator-gtk3 2>/dev/null || \
-echo "Note: Please install GTK3 and AppIndicator dependencies via your package manager if needed."
+# Install GTK dependencies for GUI (requires root)
+echo "Checking GUI dependencies..."
+echo "If GTK3 dependencies are missing, please install them:"
+echo "  Ubuntu/Debian: sudo apt-get install python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1"
+echo "  Fedora: sudo dnf install python3-gobject gtk3 libappindicator-gtk3"
+echo "  Arch: sudo pacman -S python-gobject gtk3 libappindicator-gtk3"
+
+# Create user directories
+echo "Setting up user directories..."
+mkdir -p ~/.local/bin
+mkdir -p ~/.config/ambient-brightness
+mkdir -p ~/.config/systemd/user
+mkdir -p ~/.local/share/applications
+mkdir -p ~/.config/autostart
 
 # Copy main script
 echo "Installing main script..."
-cp ambient_brightness.py /usr/local/bin/
-chmod +x /usr/local/bin/ambient_brightness.py
+cp ambient_brightness.py ~/.local/bin/
+chmod +x ~/.local/bin/ambient_brightness.py
 
 # Copy GUI script
 echo "Installing GUI application..."
-cp ambient_brightness_gui.py /usr/local/bin/ambient-brightness-gui
-chmod +x /usr/local/bin/ambient-brightness-gui
+cp ambient_brightness_gui.py ~/.local/bin/ambient-brightness-gui
+chmod +x ~/.local/bin/ambient-brightness-gui
 
-# Create config directory
-echo "Setting up configuration..."
-mkdir -p /etc/ambient-brightness
+# Create default config if it doesn't exist
+if [ ! -f ~/.config/ambient-brightness/config.conf ]; then
+    if [ -f config.conf.example ]; then
+        cp config.conf.example ~/.config/ambient-brightness/config.conf
+        echo "Created default configuration at ~/.config/ambient-brightness/config.conf"
+    else
+        cat > ~/.config/ambient-brightness/config.conf << 'EOF'
+# Ambient Brightness Control Configuration
 
-# Copy example config if it doesn't exist
-if [ ! -f /etc/ambient-brightness/config.conf ]; then
-    cp config.conf.example /etc/ambient-brightness/config.conf
-    echo "Created default configuration at /etc/ambient-brightness/config.conf"
+# Enable camera as fallback sensor (true/false)
+enable_camera=true
+
+# Smoothing factor for brightness changes (0.1-1.0)
+# Higher = faster response, Lower = smoother transitions
+smoothing_factor=0.3
+
+# Update interval in seconds (0.5-5.0)
+update_interval=2.0
+
+# Brightness limits (percentage)
+min_brightness=10
+max_brightness=100
+EOF
+        echo "Created default configuration at ~/.config/ambient-brightness/config.conf"
+    fi
 else
     echo "Configuration file already exists, skipping..."
 fi
 
-# Setup udev rules for brightness control without sudo
-echo "Setting up udev rules..."
-cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
+# Install systemd user service
+echo "Installing systemd user service..."
+cp ambient-brightness.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+
+# Install desktop entries
+echo "Installing desktop entries..."
+cp ambient-brightness-settings.desktop ~/.local/share/applications/
+cp ambient-brightness-tray.desktop ~/.config/autostart/
+update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
+
+# Setup udev rules for brightness control without sudo (requires root)
+echo ""
+echo "Setting up udev rules (requires sudo)..."
+if [ "$EUID" -eq 0 ]; then
+    cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
 # Allow users in video group to control backlight
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 EOF
+    # Reload udev rules
+    udevadm control --reload-rules
+    udevadm trigger --subsystem-match=backlight
+    echo "udev rules installed successfully!"
+else
+    echo "Run the following commands with sudo to set up backlight permissions:"
+    echo ""
+    echo "sudo bash -c 'cat > /etc/udev/rules.d/90-backlight.rules << \"EOF\""
+    echo "# Allow users in video group to control backlight"
+    echo "ACTION==\"add\", SUBSYSTEM==\"backlight\", KERNEL==\"*\", RUN+=\"/bin/chgrp video /sys/class/backlight/%k/brightness\""
+    echo "ACTION==\"add\", SUBSYSTEM==\"backlight\", KERNEL==\"*\", RUN+=\"/bin/chmod g+w /sys/class/backlight/%k/brightness\""
+    echo "EOF"
+    echo "'"
+    echo ""
+    echo "sudo udevadm control --reload-rules"
+    echo "sudo udevadm trigger --subsystem-match=backlight"
+    echo ""
+    echo "Then add yourself to the video group:"
+    echo "sudo usermod -aG video \$USER"
+    echo "(logout and login for group changes to take effect)"
+fi
 
-# Reload udev rules
-udevadm control --reload-rules
-udevadm trigger --subsystem-match=backlight
+# Ensure user is in video group
+if ! groups | grep -q video; then
+    echo ""
+    echo "Adding current user to video group (requires sudo)..."
+    if [ "$EUID" -eq 0 ]; then
+        usermod -aG video "$SUDO_USER"
+        echo "Added to video group. Please logout and login for changes to take effect."
+    else
+        echo "Run: sudo usermod -aG video \$USER"
+        echo "Then logout and login for group changes to take effect."
+    fi
+fi
 
-# Install systemd service
-echo "Installing systemd service..."
-cp ambient-brightness.service /etc/systemd/system/
-systemctl daemon-reload
-
-# Install desktop entries
-echo "Installing desktop entries..."
-cp ambient-brightness-settings.desktop /usr/share/applications/
-cp ambient-brightness-tray.desktop /etc/xdg/autostart/
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
+# Ensure ~/.local/bin is in PATH
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    echo ""
+    echo "⚠ WARNING: ~/.local/bin is not in your PATH"
+    echo "Add this line to your ~/.bashrc or ~/.profile:"
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+fi
 
 echo ""
 echo "Installation complete!"
+echo ""
+echo "✅ NO PASSWORD PROMPTS NEEDED for normal operation!"
 echo ""
 echo "GUI Application:"
 echo "  - Open 'Ambient Brightness Settings' from your application menu"
@@ -77,12 +139,13 @@ echo "  - System tray indicator will start automatically on next login"
 echo ""
 echo "Command Line:"
 echo "  To start the service:"
-echo "    sudo systemctl start ambient-brightness"
+echo "    systemctl --user start ambient-brightness"
 echo "  To enable at boot:"
-echo "    sudo systemctl enable ambient-brightness"
+echo "    systemctl --user enable ambient-brightness"
 echo "  To check status:"
-echo "    sudo systemctl status ambient-brightness"
+echo "    systemctl --user status ambient-brightness"
 echo "  To view logs:"
-echo "    sudo journalctl -u ambient-brightness -f"
+echo "    journalctl --user -u ambient-brightness -f"
 echo ""
-echo "Configuration: /etc/ambient-brightness/config.conf (or use GUI)"
+echo "Configuration: ~/.config/ambient-brightness/config.conf (or use GUI)"
+echo ""
