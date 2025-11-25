@@ -2,6 +2,18 @@
 
 Automatic screen brightness adjustment for Linux using ambient light sensors or camera, similar to smartphones.
 
+## Quick Start
+
+```bash
+# One-line install
+curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+
+# Then open the GUI
+ambient-brightness-gui
+```
+
+That's it! The GUI will guide you through starting and configuring the service.
+
 ## Features
 
 - **Graphical User Interface**: Full-featured GTK3 GUI with real-time monitoring and easy configuration
@@ -49,45 +61,94 @@ Automatic screen brightness adjustment for Linux using ambient light sensors or 
 
 ## Installation
 
-### Quick Install
+Choose one of the following installation methods:
+
+### Method 1: One-Liner Install (Easiest)
+
+Download and install automatically with a single command:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+```
+
+Or with wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+```
+
+This will automatically:
+- Clone the repository
+- Install all dependencies
+- Set up the service
+- Install the GUI application
+- Clean up temporary files
+
+### Method 2: Standard Make Install (Recommended for Developers)
+
+If you've cloned or downloaded the repository:
+
+```bash
+git clone https://github.com/jjermany/linux-ambient.git
+cd linux-ambient
+sudo make install
+```
+
+The Makefile supports standard targets:
+- `make help` - Show available targets
+- `make install` - Install everything
+- `make uninstall` - Remove everything
+- `make install-deps` - Install dependencies only
+
+### Method 3: Using Install Script
+
+After cloning/downloading the repository:
+
+```bash
+cd linux-ambient
 sudo ./install.sh
 ```
 
-This will:
-- Install Python dependencies
-- Copy files to system directories
-- Set up udev rules for brightness control
+This script will:
+- Install Python and GTK dependencies
+- Copy scripts to `/usr/local/bin/`
+- Set up configuration in `/etc/ambient-brightness/`
+- Create udev rules for brightness control
 - Install systemd service
+- Add GUI desktop entries
 
-### Manual Installation
+### Method 4: Manual Installation
 
-1. Install Python dependencies (if using camera mode):
+For complete control over the installation process:
+
+1. **Install dependencies**:
 ```bash
-sudo apt install python3-opencv  # Debian/Ubuntu
-# or
-sudo dnf install python3-opencv  # Fedora
-# or
-pip3 install opencv-python numpy
+# Debian/Ubuntu
+sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 python3-opencv python3-numpy
+
+# Fedora
+sudo dnf install python3-gobject gtk3 libappindicator-gtk3 python3-opencv python3-numpy
+
+# Arch Linux
+sudo pacman -S python-gobject gtk3 libappindicator-gtk3 python-opencv python-numpy
 ```
 
-2. Copy the main script:
+2. **Copy scripts**:
 ```bash
 sudo cp ambient_brightness.py /usr/local/bin/
+sudo cp ambient_brightness_gui.py /usr/local/bin/ambient-brightness-gui
 sudo chmod +x /usr/local/bin/ambient_brightness.py
+sudo chmod +x /usr/local/bin/ambient-brightness-gui
 ```
 
-3. Create config directory and copy example config:
+3. **Create configuration**:
 ```bash
 sudo mkdir -p /etc/ambient-brightness
 sudo cp config.conf.example /etc/ambient-brightness/config.conf
 ```
 
-4. Set up udev rules (to avoid needing sudo):
+4. **Set up udev rules**:
 ```bash
-sudo cp 90-backlight.rules /etc/udev/rules.d/  # If you create this file
-# Or create manually:
 sudo tee /etc/udev/rules.d/90-backlight.rules << 'EOF'
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
@@ -97,10 +158,17 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=backlight
 ```
 
-5. Install systemd service:
+5. **Install systemd service**:
 ```bash
 sudo cp ambient-brightness.service /etc/systemd/system/
 sudo systemctl daemon-reload
+```
+
+6. **Install desktop entries**:
+```bash
+sudo cp ambient-brightness-settings.desktop /usr/share/applications/
+sudo cp ambient-brightness-tray.desktop /etc/xdg/autostart/
+sudo update-desktop-database /usr/share/applications/
 ```
 
 ## Usage
@@ -331,11 +399,30 @@ ls -la /dev/video*
 
 ## Uninstallation
 
+### Using Make (Recommended)
+
 ```bash
+cd linux-ambient
+sudo make uninstall
+```
+
+### Using Uninstall Script
+
+```bash
+cd linux-ambient
 sudo ./uninstall.sh
 ```
 
-This will stop the service, remove installed files, and optionally remove configuration.
+Both methods will:
+- Stop and disable the service
+- Remove all installed files
+- Remove desktop entries
+- Ask before removing configuration
+
+To completely remove including configuration:
+```bash
+sudo rm -rf /etc/ambient-brightness
+```
 
 ## Architecture
 
