@@ -395,7 +395,13 @@ ls -la /dev/video*
 
 ## Uninstallation
 
-To remove the application:
+**Option 1: Using the uninstall script (recommended)**
+
+```bash
+./uninstall.sh
+```
+
+**Option 2: Manual removal**
 
 ```bash
 # Stop and disable the service
