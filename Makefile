@@ -53,25 +53,46 @@ install-config: check-root
 
 install-udev: check-root
 	@echo "Setting up udev rules..."
-	@echo '# Allow users in video group to control backlight' > $(UDEV_DIR)/90-backlight.rules
-	@echo 'ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"' >> $(UDEV_DIR)/90-backlight.rules
-	@echo 'ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"' >> $(UDEV_DIR)/90-backlight.rules
-	@udevadm control --reload-rules
-	@udevadm trigger --subsystem-match=backlight 2>/dev/null || true
-	@echo "Udev rules installed"
+	@if [ -d $(UDEV_DIR) ]; then \
+		echo '# Allow users in video group to control backlight' > $(UDEV_DIR)/90-backlight.rules; \
+		echo 'ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"' >> $(UDEV_DIR)/90-backlight.rules; \
+		echo 'ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"' >> $(UDEV_DIR)/90-backlight.rules; \
+		udevadm control --reload-rules 2>/dev/null || true; \
+		udevadm trigger --subsystem-match=backlight 2>/dev/null || true; \
+		echo "Udev rules installed"; \
+	else \
+		echo "⚠ udev rules directory not found - skipping udev rules"; \
+		echo "  You may need to run the service with appropriate permissions"; \
+	fi
 
 install-service: check-root
-	@echo "Installing systemd service..."
-	@install -m 644 ambient-brightness.service $(SYSTEMD_DIR)/ambient-brightness.service
-	@systemctl daemon-reload
-	@echo "Systemd service installed"
+	@echo "Checking for systemd..."
+	@if systemctl --version >/dev/null 2>&1 && [ -d /run/systemd/system ]; then \
+		echo "Installing systemd service..."; \
+		install -m 644 ambient-brightness.service $(SYSTEMD_DIR)/ambient-brightness.service; \
+		systemctl daemon-reload; \
+		echo "Systemd service installed"; \
+	else \
+		echo "⚠ systemd not available - service will run in standalone mode"; \
+		echo "  Use the GUI application to start/stop the service"; \
+	fi
 
 install-gui: check-root
 	@echo "Installing desktop entries..."
-	@install -m 644 ambient-brightness-settings.desktop $(DESKTOP_DIR)/ambient-brightness-settings.desktop
-	@install -m 644 ambient-brightness-tray.desktop $(AUTOSTART_DIR)/ambient-brightness-tray.desktop
+	@if [ -d $(DESKTOP_DIR) ]; then \
+		install -m 644 ambient-brightness-settings.desktop $(DESKTOP_DIR)/ambient-brightness-settings.desktop; \
+		echo "Desktop entry installed to $(DESKTOP_DIR)"; \
+	else \
+		echo "⚠ Desktop directory not found - skipping desktop entry"; \
+	fi
+	@if [ -d $(AUTOSTART_DIR) ]; then \
+		install -m 644 ambient-brightness-tray.desktop $(AUTOSTART_DIR)/ambient-brightness-tray.desktop; \
+		echo "Autostart entry installed to $(AUTOSTART_DIR)"; \
+	else \
+		echo "⚠ Autostart directory not found - skipping autostart entry"; \
+	fi
 	@update-desktop-database $(DESKTOP_DIR) 2>/dev/null || true
-	@echo "Desktop entries installed"
+	@echo "Desktop entries installation complete"
 
 install: check-root install-deps install-scripts install-config install-udev install-service install-gui
 	@echo ""
@@ -79,33 +100,44 @@ install: check-root install-deps install-scripts install-config install-udev ins
 	@echo "Installation complete!"
 	@echo "========================================="
 	@echo ""
-	@echo "GUI Application:"
+	@echo "GUI Application (RECOMMENDED):"
 	@echo "  - Open 'Ambient Brightness Settings' from your application menu"
 	@echo "  - Or run: ambient-brightness-gui"
+	@echo "  - Use the GUI to start/stop the service and adjust settings"
 	@echo "  - System tray indicator will start automatically on next login"
 	@echo ""
-	@echo "Start the service:"
-	@echo "  sudo systemctl start ambient-brightness"
-	@echo ""
-	@echo "Enable at boot:"
-	@echo "  sudo systemctl enable ambient-brightness"
-	@echo ""
+	@if systemctl --version >/dev/null 2>&1 && [ -d /run/systemd/system ]; then \
+		echo "Command Line (systemd mode):"; \
+		echo "  Start the service:"; \
+		echo "    sudo systemctl start ambient-brightness"; \
+		echo ""; \
+		echo "  Enable at boot:"; \
+		echo "    sudo systemctl enable ambient-brightness"; \
+		echo ""; \
+	else \
+		echo "Command Line (standalone mode):"; \
+		echo "  The GUI application provides the easiest way to manage the service"; \
+		echo "  Or run manually: $(BINDIR)/ambient_brightness.py &"; \
+		echo ""; \
+	fi
 	@echo "Configuration: $(CONFIG_DIR)/config.conf (or use GUI)"
 	@echo ""
 
 uninstall: check-root
 	@echo "Uninstalling Ambient Brightness Control..."
-	@systemctl stop ambient-brightness 2>/dev/null || true
-	@systemctl disable ambient-brightness 2>/dev/null || true
-	@rm -f $(SYSTEMD_DIR)/ambient-brightness.service
-	@systemctl daemon-reload
+	@if systemctl --version >/dev/null 2>&1 && [ -d /run/systemd/system ]; then \
+		systemctl stop ambient-brightness 2>/dev/null || true; \
+		systemctl disable ambient-brightness 2>/dev/null || true; \
+		rm -f $(SYSTEMD_DIR)/ambient-brightness.service; \
+		systemctl daemon-reload; \
+	fi
 	@rm -f $(BINDIR)/ambient_brightness.py
 	@rm -f $(BINDIR)/ambient-brightness-gui
 	@rm -f $(DESKTOP_DIR)/ambient-brightness-settings.desktop
 	@rm -f $(AUTOSTART_DIR)/ambient-brightness-tray.desktop
 	@update-desktop-database $(DESKTOP_DIR) 2>/dev/null || true
 	@rm -f $(UDEV_DIR)/90-backlight.rules
-	@udevadm control --reload-rules
+	@udevadm control --reload-rules 2>/dev/null || true
 	@echo ""
 	@echo "Uninstallation complete!"
 	@echo "Configuration files remain at $(CONFIG_DIR)"
