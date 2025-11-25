@@ -63,10 +63,16 @@ else
     echo "Configuration file already exists, skipping..."
 fi
 
-# Install systemd user service
+# Install systemd user service (if available)
 echo "Installing systemd user service..."
-cp ambient-brightness.service ~/.config/systemd/user/
-systemctl --user daemon-reload
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/dev/null 2>&1; then
+    cp ambient-brightness.service ~/.config/systemd/user/
+    systemctl --user daemon-reload
+    echo "✅ systemd user service installed"
+else
+    echo "⚠ systemd not available - service will run in standalone mode"
+    echo "  Use the GUI application to start/stop the service"
+fi
 
 # Install desktop entries
 echo "Installing desktop entries..."
@@ -78,15 +84,21 @@ update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
 echo ""
 echo "Setting up udev rules (requires sudo)..."
 if [ "$EUID" -eq 0 ]; then
-    cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
+    if [ -d /etc/udev/rules.d ]; then
+        cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
 # Allow users in video group to control backlight
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 EOF
-    # Reload udev rules
-    udevadm control --reload-rules
-    udevadm trigger --subsystem-match=backlight
-    echo "udev rules installed successfully!"
+        # Reload udev rules
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules
+            udevadm trigger --subsystem-match=backlight
+        fi
+        echo "udev rules installed successfully!"
+    else
+        echo "⚠ /etc/udev/rules.d not found - skipping udev rules"
+    fi
 else
     echo "Run the following commands with sudo to set up backlight permissions:"
     echo ""
@@ -132,20 +144,30 @@ echo "Installation complete!"
 echo ""
 echo "✅ NO PASSWORD PROMPTS NEEDED for normal operation!"
 echo ""
-echo "GUI Application:"
+echo "GUI Application (RECOMMENDED):"
 echo "  - Open 'Ambient Brightness Settings' from your application menu"
 echo "  - Or run: ambient-brightness-gui"
+echo "  - Use the GUI to start/stop the service and adjust settings"
 echo "  - System tray indicator will start automatically on next login"
 echo ""
-echo "Command Line:"
-echo "  To start the service:"
-echo "    systemctl --user start ambient-brightness"
-echo "  To enable at boot:"
-echo "    systemctl --user enable ambient-brightness"
-echo "  To check status:"
-echo "    systemctl --user status ambient-brightness"
-echo "  To view logs:"
-echo "    journalctl --user -u ambient-brightness -f"
+
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/dev/null 2>&1; then
+    echo "Command Line (systemd mode):"
+    echo "  To start the service:"
+    echo "    systemctl --user start ambient-brightness"
+    echo "  To enable at boot:"
+    echo "    systemctl --user enable ambient-brightness"
+    echo "  To check status:"
+    echo "    systemctl --user status ambient-brightness"
+    echo "  To view logs:"
+    echo "    journalctl --user -u ambient-brightness -f"
+else
+    echo "Command Line (standalone mode):"
+    echo "  To start the service manually:"
+    echo "    ~/.local/bin/ambient_brightness.py &"
+    echo "  Note: Use the GUI application for easier service management"
+fi
+
 echo ""
 echo "Configuration: ~/.config/ambient-brightness/config.conf (or use GUI)"
 echo ""

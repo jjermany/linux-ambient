@@ -221,41 +221,43 @@ rm ~/.config/autostart/ambient-brightness-tray.desktop
 
 ### Command Line Usage
 
-You can also manage the service via command line (**no sudo needed!**):
+#### With systemd (Default)
 
-#### Start the Service
+If systemd is available, you can manage the service via command line (**no sudo needed!**):
 
 ```bash
+# Start the service
 systemctl --user start ambient-brightness
-```
 
-### Enable at Boot
-
-```bash
+# Enable at boot
 systemctl --user enable ambient-brightness
-```
 
-### Check Status
-
-```bash
+# Check status
 systemctl --user status ambient-brightness
-```
 
-### View Logs
-
-```bash
-# Follow live logs
+# View logs
 journalctl --user -u ambient-brightness -f
 
-# View recent logs
-journalctl --user -u ambient-brightness -n 50
-```
-
-#### Stop the Service
-
-```bash
+# Stop the service
 systemctl --user stop ambient-brightness
 ```
+
+#### Standalone Mode (Non-systemd Environments)
+
+If systemd is not available, the service automatically runs in standalone mode. The GUI will detect this and provide appropriate controls. You can also manage it manually:
+
+```bash
+# Start the service manually
+~/.local/bin/ambient_brightness.py &
+
+# Check if running
+ps aux | grep ambient_brightness
+
+# Stop the service (kill the process)
+pkill -f ambient_brightness.py
+```
+
+**Note**: It's recommended to use the GUI application for easier service management in standalone mode. The GUI handles process management, logging, and autostart configuration automatically.
 
 ## Configuration
 
@@ -346,16 +348,36 @@ If you get permission errors:
 
 ### Service Won't Start
 
+**If using systemd:**
 ```bash
 # Check detailed error logs
 journalctl --user -u ambient-brightness -xe
 
+# Verify systemd service file exists
+ls -l ~/.config/systemd/user/ambient-brightness.service
+
+# Reload systemd
+systemctl --user daemon-reload
+```
+
+**If systemd is not available:**
+The service will automatically run in standalone mode. Use the GUI application to start the service, or:
+
+```bash
 # Verify Python script is executable
 ls -l ~/.local/bin/ambient_brightness.py
 
 # Test script manually
 ~/.local/bin/ambient_brightness.py
+
+# Check logs in standalone mode
+cat ~/.config/ambient-brightness/service.log
 ```
+
+**Common issues:**
+- Missing hardware: The service requires either an ambient light sensor or a camera, plus a backlight device
+- Permission issues: Ensure you're in the `video` group for backlight control
+- GTK dependencies: Make sure GTK3 libraries are installed for the GUI
 
 ### Brightness Changes Too Fast/Slow
 
