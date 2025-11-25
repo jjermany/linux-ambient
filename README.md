@@ -4,12 +4,15 @@ Automatic screen brightness adjustment for Linux using ambient light sensors or 
 
 ## Features
 
+- **Graphical User Interface**: Full-featured GTK3 GUI with real-time monitoring and easy configuration
+- **System Tray Integration**: Quick access indicator with service control
 - **Dual Sensor Support**: Automatically uses ambient light sensor (ALS) if available, falls back to camera
 - **Smart Algorithm**: Non-linear brightness mapping optimized for human perception
 - **Smooth Transitions**: Prevents jarring brightness changes with exponential smoothing
-- **Configurable**: Adjust sensitivity, update rate, and brightness limits
+- **Highly Configurable**: Adjust sensitivity, update rate, and brightness limits via GUI or config file
+- **Service Management**: Start/stop/restart service and view logs directly from GUI
 - **Lightweight**: Runs as a systemd service with minimal resource usage
-- **Secure**: Includes udev rules for proper permission management
+- **Secure**: Includes udev rules and PolicyKit integration for proper permission management
 
 ## How It Works
 
@@ -38,6 +41,9 @@ Automatic screen brightness adjustment for Linux using ambient light sensors or 
 
 ### Python Dependencies
 
+- `python3-gi` / `PyGObject` (required for GUI)
+- `gtk3` / `gir1.2-gtk-3.0` (required for GUI)
+- `libappindicator-gtk3` / `gir1.2-appindicator3-0.1` (required for system tray)
 - `opencv-python` (optional, only needed for camera mode)
 - `numpy` (optional, only needed for camera mode)
 
@@ -99,7 +105,60 @@ sudo systemctl daemon-reload
 
 ## Usage
 
-### Start the Service
+### GUI Application (Recommended)
+
+After installation, you can manage the service using the graphical interface:
+
+#### Opening the Settings GUI
+
+1. **From Application Menu**: Search for "Ambient Brightness Settings" in your application launcher
+2. **From Command Line**: Run `ambient-brightness-gui`
+3. **System Tray**: Click the brightness indicator icon in your system tray (auto-starts on login)
+
+#### GUI Features
+
+**Status Tab**:
+- View service status (running/stopped, enabled/disabled)
+- Real-time sensor readings with progress bars
+- Current ambient light level and screen brightness
+- Hardware information (backlight device)
+
+**Settings Tab**:
+- Enable/disable camera fallback sensor
+- Adjust smoothing factor (how fast brightness changes)
+- Set update interval (how often to check sensor)
+- Configure minimum and maximum brightness limits
+- All settings adjustable via intuitive sliders
+
+**Service Tab**:
+- Start/stop/restart the service with one click
+- Enable/disable automatic startup at boot
+- View recent service logs
+- Refresh logs in real-time
+
+#### System Tray Indicator
+
+The system tray indicator provides quick access:
+- Shows current service status
+- Quick start/stop service
+- Open settings window
+- Automatically starts on login
+
+To manually start the tray indicator:
+```bash
+ambient-brightness-gui --tray
+```
+
+To disable auto-start:
+```bash
+rm ~/.config/autostart/ambient-brightness-tray.desktop
+```
+
+### Command Line Usage
+
+You can also manage the service via command line:
+
+#### Start the Service
 
 ```bash
 sudo systemctl start ambient-brightness
@@ -127,7 +186,7 @@ sudo journalctl -u ambient-brightness -f
 sudo journalctl -u ambient-brightness -n 50
 ```
 
-### Stop the Service
+#### Stop the Service
 
 ```bash
 sudo systemctl stop ambient-brightness
@@ -135,7 +194,19 @@ sudo systemctl stop ambient-brightness
 
 ## Configuration
 
-Edit `/etc/ambient-brightness/config.conf`:
+### Via GUI (Recommended)
+
+Use the Settings tab in the GUI application to adjust all configuration options with real-time preview:
+
+1. Open `ambient-brightness-gui`
+2. Go to the "Settings" tab
+3. Adjust sliders and checkboxes
+4. Click "Save Settings"
+5. Restart the service from the "Service" tab
+
+### Via Config File
+
+Alternatively, edit `/etc/ambient-brightness/config.conf`:
 
 ```ini
 # Enable camera as fallback (true/false)
@@ -223,9 +294,30 @@ sudo /usr/local/bin/ambient_brightness.py
 
 ### Brightness Changes Too Fast/Slow
 
-Adjust `smoothing_factor` in config:
+Use the GUI Settings tab to adjust the smoothing factor slider, or edit config:
 - Faster response: increase to 0.5-0.8
 - Slower/smoother: decrease to 0.1-0.2
+
+### GUI Won't Start
+
+If the GUI application fails to launch:
+
+```bash
+# Check if GTK3 dependencies are installed
+dpkg -l | grep python3-gi  # Debian/Ubuntu
+rpm -qa | grep python3-gobject  # Fedora
+
+# Install missing dependencies
+sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1  # Debian/Ubuntu
+sudo dnf install python3-gobject gtk3 libappindicator-gtk3  # Fedora
+```
+
+### Settings Won't Save
+
+If you get permission errors when saving settings:
+- The GUI uses PolicyKit (pkexec) to save with elevated privileges
+- Ensure PolicyKit is installed and running
+- Check `/etc/ambient-brightness/` directory permissions
 
 ### Camera Not Working
 
@@ -247,9 +339,12 @@ This will stop the service, remove installed files, and optionally remove config
 
 ## Architecture
 
+### Service Architecture
+
 ```
 ┌─────────────────────────────────────────┐
 │         AmbientBrightnessService        │
+│              (Background)               │
 └────────────────┬────────────────────────┘
                  │
         ┌────────┴────────┐
@@ -267,6 +362,34 @@ This will stop the service, remove installed files, and optionally remove config
         │    Adapter      │
         │  (Algorithm)    │
         └─────────────────┘
+```
+
+### GUI Architecture
+
+```
+┌────────────────────────────────────────────┐
+│        Ambient Brightness GUI              │
+│         (GTK3 Application)                 │
+└──────┬──────────────┬──────────────────────┘
+       │              │
+       │              └──────────────┐
+       │                             │
+┌──────▼──────┐  ┌──────▼──────┐   │
+│   Settings  │  │   Service   │   │
+│   Window    │  │   Control   │   │
+│  (3 Tabs)   │  │  (systemd)  │   │
+└──────┬──────┘  └──────┬──────┘   │
+       │                 │          │
+       │          ┌──────▼──────┐   │
+       │          │   Config    │   │
+       │          │  Manager    │   │
+       │          │  (pkexec)   │   │
+       │          └─────────────┘   │
+       │                            │
+┌──────▼────────────────────────────▼───┐
+│        System Tray Indicator          │
+│         (AppIndicator3)               │
+└───────────────────────────────────────┘
 ```
 
 ## Supported Hardware
