@@ -14,6 +14,8 @@ import sys
 import json
 import socket
 import subprocess
+import signal
+import time
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -22,6 +24,8 @@ CONFIG_FILE = CONFIG_DIR / 'config.conf'
 SOCKET_PATH = '/tmp/ambient-brightness.sock'
 GUI_CONFIG_DIR = Path.home() / '.config' / 'ambient-brightness'
 GUI_CONFIG_FILE = GUI_CONFIG_DIR / 'gui.conf'
+PID_FILE = Path.home() / '.config' / 'ambient-brightness' / 'service.pid'
+LOG_FILE = Path.home() / '.config' / 'ambient-brightness' / 'service.log'
 
 
 class ConfigManager:
@@ -135,101 +139,283 @@ class ConfigManager:
 
 
 class ServiceControl:
-    """Control systemd service"""
+    """Control systemd service or standalone process"""
+
+    def __init__(self):
+        self.use_systemd = self._check_systemd_available()
+        self.script_path = Path.home() / '.local' / 'bin' / 'ambient_brightness.py'
 
     @staticmethod
-    def is_running() -> bool:
+    def _check_systemd_available() -> bool:
+        """Check if systemd is available and working"""
+        try:
+            result = subprocess.run(
+                ['systemctl', '--user', 'is-system-running'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            # systemd is available if command succeeds
+            return result.returncode in [0, 1]  # 0 = running, 1 = degraded but working
+        except:
+            return False
+
+    def _read_pid(self) -> Optional[int]:
+        """Read PID from file"""
+        try:
+            if PID_FILE.exists():
+                pid = int(PID_FILE.read_text().strip())
+                # Check if process is actually running
+                try:
+                    os.kill(pid, 0)  # Signal 0 just checks if process exists
+                    return pid
+                except OSError:
+                    # Process not running, clean up stale PID file
+                    PID_FILE.unlink()
+                    return None
+            return None
+        except:
+            return None
+
+    def _write_pid(self, pid: int):
+        """Write PID to file"""
+        try:
+            PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+            PID_FILE.write_text(str(pid))
+        except Exception as e:
+            print(f"Error writing PID file: {e}")
+
+    def _remove_pid(self):
+        """Remove PID file"""
+        try:
+            if PID_FILE.exists():
+                PID_FILE.unlink()
+        except:
+            pass
+
+    def is_running(self) -> bool:
         """Check if service is running"""
-        try:
-            result = subprocess.run(
-                ['systemctl', '--user', 'is-active', 'ambient-brightness'],
-                capture_output=True,
-                text=True
-            )
-            return result.returncode == 0
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                result = subprocess.run(
+                    ['systemctl', '--user', 'is-active', 'ambient-brightness'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                return result.returncode == 0
+            except:
+                return False
+        else:
+            # Check standalone process
+            return self._read_pid() is not None
 
-    @staticmethod
-    def is_enabled() -> bool:
+    def is_enabled(self) -> bool:
         """Check if service is enabled"""
-        try:
-            result = subprocess.run(
-                ['systemctl', '--user', 'is-enabled', 'ambient-brightness'],
-                capture_output=True,
-                text=True
-            )
-            return result.returncode == 0
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                result = subprocess.run(
+                    ['systemctl', '--user', 'is-enabled', 'ambient-brightness'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                return result.returncode == 0
+            except:
+                return False
+        else:
+            # For standalone, check if autostart file exists
+            autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-service.desktop'
+            return autostart_file.exists()
 
-    @staticmethod
-    def start() -> bool:
+    def start(self) -> bool:
         """Start the service"""
-        try:
-            subprocess.run(['systemctl', '--user', 'start', 'ambient-brightness'], check=True)
-            return True
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                subprocess.run(['systemctl', '--user', 'start', 'ambient-brightness'],
+                             check=True, timeout=5)
+                return True
+            except:
+                return False
+        else:
+            # Start standalone process
+            if self.is_running():
+                return True  # Already running
 
-    @staticmethod
-    def stop() -> bool:
+            try:
+                # Ensure log directory exists
+                LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+                # Start the service in background
+                with open(LOG_FILE, 'a') as log:
+                    process = subprocess.Popen(
+                        [sys.executable, str(self.script_path)],
+                        stdout=log,
+                        stderr=log,
+                        start_new_session=True  # Detach from parent
+                    )
+
+                    # Write PID file
+                    self._write_pid(process.pid)
+
+                    # Wait a bit to see if it starts successfully
+                    time.sleep(0.5)
+
+                    # Check if still running
+                    if self.is_running():
+                        return True
+                    else:
+                        self._remove_pid()
+                        return False
+            except Exception as e:
+                print(f"Error starting service: {e}")
+                return False
+
+    def stop(self) -> bool:
         """Stop the service"""
-        try:
-            subprocess.run(['systemctl', '--user', 'stop', 'ambient-brightness'], check=True)
-            return True
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                subprocess.run(['systemctl', '--user', 'stop', 'ambient-brightness'],
+                             check=True, timeout=5)
+                return True
+            except:
+                return False
+        else:
+            # Stop standalone process
+            pid = self._read_pid()
+            if pid is None:
+                return True  # Not running
 
-    @staticmethod
-    def restart() -> bool:
+            try:
+                # Send SIGTERM to gracefully stop
+                os.kill(pid, signal.SIGTERM)
+
+                # Wait for process to exit (up to 5 seconds)
+                for _ in range(50):
+                    try:
+                        os.kill(pid, 0)
+                        time.sleep(0.1)
+                    except OSError:
+                        # Process has exited
+                        break
+                else:
+                    # Force kill if still running
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+
+                self._remove_pid()
+                return True
+            except Exception as e:
+                print(f"Error stopping service: {e}")
+                return False
+
+    def restart(self) -> bool:
         """Restart the service"""
-        try:
-            subprocess.run(['systemctl', '--user', 'restart', 'ambient-brightness'], check=True)
-            return True
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                subprocess.run(['systemctl', '--user', 'restart', 'ambient-brightness'],
+                             check=True, timeout=5)
+                return True
+            except:
+                return False
+        else:
+            # Stop and start
+            self.stop()
+            time.sleep(0.5)
+            return self.start()
 
-    @staticmethod
-    def enable() -> bool:
+    def enable(self) -> bool:
         """Enable service at boot"""
-        try:
-            subprocess.run(['systemctl', '--user', 'enable', 'ambient-brightness'], check=True)
-            return True
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                subprocess.run(['systemctl', '--user', 'enable', 'ambient-brightness'],
+                             check=True, timeout=5)
+                return True
+            except:
+                return False
+        else:
+            # Create autostart desktop entry
+            try:
+                autostart_dir = Path.home() / '.config' / 'autostart'
+                autostart_dir.mkdir(parents=True, exist_ok=True)
 
-    @staticmethod
-    def disable() -> bool:
+                autostart_file = autostart_dir / 'ambient-brightness-service.desktop'
+                content = f"""[Desktop Entry]
+Type=Application
+Name=Ambient Brightness Service
+Exec={sys.executable} {self.script_path}
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+"""
+                autostart_file.write_text(content)
+                return True
+            except Exception as e:
+                print(f"Error enabling autostart: {e}")
+                return False
+
+    def disable(self) -> bool:
         """Disable service at boot"""
-        try:
-            subprocess.run(['systemctl', '--user', 'disable', 'ambient-brightness'], check=True)
-            return True
-        except:
-            return False
+        if self.use_systemd:
+            try:
+                subprocess.run(['systemctl', '--user', 'disable', 'ambient-brightness'],
+                             check=True, timeout=5)
+                return True
+            except:
+                return False
+        else:
+            # Remove autostart desktop entry
+            try:
+                autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-service.desktop'
+                if autostart_file.exists():
+                    autostart_file.unlink()
+                return True
+            except Exception as e:
+                print(f"Error disabling autostart: {e}")
+                return False
 
 
 class StatusMonitor:
     """Monitor service status and sensor readings"""
 
-    def __init__(self):
+    def __init__(self, service_control):
         self.light_level = 0
         self.brightness = 0
         self.sensor_type = "Unknown"
+        self.service_control = service_control
+
+    def _get_logs(self) -> str:
+        """Get service logs from systemd or log file"""
+        if self.service_control.use_systemd:
+            try:
+                result = subprocess.run(
+                    ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '50', '--no-pager'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                return result.stdout
+            except:
+                return ""
+        else:
+            # Read from log file
+            try:
+                if LOG_FILE.exists():
+                    lines = LOG_FILE.read_text().splitlines()
+                    return '\n'.join(lines[-50:])  # Last 50 lines
+                return ""
+            except:
+                return ""
 
     def get_sensor_info(self) -> tuple:
         """Get current sensor information from service logs"""
         try:
-            # Get recent service logs
-            result = subprocess.run(
-                ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '50', '--no-pager'],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
+            logs = self._get_logs()
 
             # Parse logs for sensor info
-            for line in result.stdout.splitlines():
+            for line in logs.splitlines():
                 if 'Using ALS:' in line:
                     self.sensor_type = "Ambient Light Sensor"
                 elif 'Using camera' in line or 'Camera sensor initialized' in line:
@@ -279,7 +465,7 @@ class SettingsWindow(Gtk.Window):
         self.config = ConfigManager.load_config()
         self.gui_config = ConfigManager.load_gui_config()
         self.service_control = ServiceControl()
-        self.status_monitor = StatusMonitor()
+        self.status_monitor = StatusMonitor(self.service_control)
 
         # Build UI
         self.build_ui()
@@ -563,6 +749,10 @@ class SettingsWindow(Gtk.Window):
         else:
             status_text += " and <b>disabled</b> at boot"
 
+        # Add mode indicator
+        mode = "systemd" if self.service_control.use_systemd else "standalone"
+        status_text += f"\n<small>(Mode: {mode})</small>"
+
         self.service_status_label.set_markup(f'<span color="{status_color}">{status_text}</span>')
         self.service_control_status.set_markup(f'<span color="{status_color}">{status_text}</span>')
 
@@ -679,15 +869,24 @@ class SettingsWindow(Gtk.Window):
     def on_refresh_logs_clicked(self, button):
         """Refresh service logs"""
         try:
-            result = subprocess.run(
-                ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '100', '--no-pager'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            if self.service_control.use_systemd:
+                result = subprocess.run(
+                    ['journalctl', '--user', '-u', 'ambient-brightness', '-n', '100', '--no-pager'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                log_text = result.stdout
+            else:
+                # Read from log file
+                if LOG_FILE.exists():
+                    lines = LOG_FILE.read_text().splitlines()
+                    log_text = '\n'.join(lines[-100:])  # Last 100 lines
+                else:
+                    log_text = "No log file found. Start the service to generate logs."
 
             buffer = self.log_textview.get_buffer()
-            buffer.set_text(result.stdout)
+            buffer.set_text(log_text)
 
         except Exception as e:
             self.show_error(f"Failed to load logs: {e}")
