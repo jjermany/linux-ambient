@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ambient Brightness Settings
+GenericName=Display Brightness Manager
+Comment=Configure automatic brightness control based on ambient light
+Icon=display-brightness-symbolic
+Exec=ambient-brightness-gui
+Terminal=false
+Categories=Settings;System;
+Keywords=brightness;display;backlight;ambient;light;
