@@ -1,37 +1,27 @@
 #!/bin/bash
 # Quick installation script for Ambient Brightness Control
 # Can be run directly from the web:
-# curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | sudo bash
+# curl -fsSL https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-install.sh | bash
 
 set -e
 
 REPO_URL="https://github.com/jjermany/linux-ambient"
 BRANCH="main"
-TMP_DIR="/tmp/ambient-brightness-install"
+TMP_DIR="/tmp/ambient-brightness-install-$$"
 
 echo "========================================="
 echo "Ambient Brightness Control - Quick Install"
 echo "========================================="
 echo ""
 
-# Check for root
-if [ "$EUID" -ne 0 ]; then
-    echo "Error: This script must be run as root (use sudo)"
+# Check for required commands
+if ! command -v git &> /dev/null; then
+    echo "Error: git is not installed. Please install it first:"
+    echo "  Ubuntu/Debian: sudo apt-get install git"
+    echo "  Fedora: sudo dnf install git"
+    echo "  Arch: sudo pacman -S git"
     exit 1
 fi
-
-# Check for required commands
-for cmd in git; do
-    if ! command -v $cmd &> /dev/null; then
-        echo "Installing git..."
-        apt-get install -y git 2>/dev/null || \
-        dnf install -y git 2>/dev/null || \
-        pacman -S --noconfirm git 2>/dev/null || {
-            echo "Error: Could not install git. Please install it manually."
-            exit 1
-        }
-    fi
-done
 
 # Clean up any previous installation attempts
 rm -rf "$TMP_DIR"
