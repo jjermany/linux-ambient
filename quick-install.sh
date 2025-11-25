@@ -40,9 +40,9 @@ cd "$TMP_DIR"
 echo ""
 echo "Running installation..."
 if [ -f "Makefile" ]; then
-    make install
+    sudo make install
 else
-    ./install.sh
+    sudo ./install.sh
 fi
 
 # Clean up
