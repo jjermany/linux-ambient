@@ -65,13 +65,32 @@ fi
 
 # Install systemd user service (if available)
 echo "Installing systemd user service..."
-if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/dev/null 2>&1; then
+SYSTEMD_AVAILABLE=false
+
+if command -v systemctl >/dev/null 2>&1; then
+    # Check if we can communicate with systemd user session
+    # We use 'list-units' instead of 'is-system-running' because the latter
+    # can fail even when systemd is functional (e.g., in degraded state)
+    if systemctl --user list-units >/dev/null 2>&1; then
+        SYSTEMD_AVAILABLE=true
+    fi
+fi
+
+if [ "$SYSTEMD_AVAILABLE" = true ]; then
     if [ -f ambient-brightness.service ]; then
         cp ambient-brightness.service ~/.config/systemd/user/
-        systemctl --user daemon-reload
+        systemctl --user daemon-reload 2>/dev/null || true
+
         # Verify installation
         if [ -f ~/.config/systemd/user/ambient-brightness.service ]; then
             echo "✅ systemd user service installed successfully"
+
+            # Verify the executable is in place (should be from earlier step)
+            if [ -x ~/.local/bin/ambient_brightness.py ]; then
+                echo "✅ Service is ready to start"
+            else
+                echo "⚠️  Warning: Executable not found (this shouldn't happen)"
+            fi
         else
             echo "❌ Failed to install service file to ~/.config/systemd/user/"
             echo "  Run ./fix-service-installation.sh to fix this issue"
@@ -81,7 +100,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/
         echo "  Run ./fix-service-installation.sh to create and install it"
     fi
 else
-    echo "⚠ systemd not available - service will run in standalone mode"
+    echo "⚠️  systemd not available - service will run in standalone mode"
     echo "  Use the GUI application to start/stop the service"
 fi
 
