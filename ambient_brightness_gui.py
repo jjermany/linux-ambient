@@ -331,6 +331,41 @@ class ServiceControl:
             time.sleep(0.5)
             return self.start()
 
+    def reload(self) -> bool:
+        """Reload service configuration without restarting"""
+        if self.use_systemd:
+            try:
+                # Get PID from systemctl
+                result = subprocess.run(
+                    ['systemctl', '--user', 'show', '--property=MainPID', 'ambient-brightness'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if result.returncode == 0:
+                    pid_line = result.stdout.strip()
+                    if '=' in pid_line:
+                        pid = int(pid_line.split('=')[1])
+                        if pid > 0:
+                            os.kill(pid, signal.SIGHUP)
+                            return True
+                return False
+            except Exception as e:
+                print(f"Error reloading service: {e}")
+                return False
+        else:
+            # Reload standalone process
+            pid = self._read_pid()
+            if pid is None:
+                return False  # Not running
+
+            try:
+                os.kill(pid, signal.SIGHUP)
+                return True
+            except Exception as e:
+                print(f"Error reloading service: {e}")
+                return False
+
     def enable(self) -> bool:
         """Enable service at boot"""
         if self.use_systemd:
@@ -805,6 +840,11 @@ class SettingsWindow(Gtk.Window):
         gui_saved = ConfigManager.save_gui_config(self.gui_config)
 
         if service_saved and gui_saved:
+            # Try to reload the running service
+            reload_success = False
+            if self.service_control.is_running():
+                reload_success = self.service_control.reload()
+
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
@@ -812,10 +852,23 @@ class SettingsWindow(Gtk.Window):
                 buttons=Gtk.ButtonsType.OK,
                 text="Settings Saved"
             )
-            dialog.format_secondary_text(
-                "Configuration has been saved.\n"
-                "Restart the service for changes to take effect."
-            )
+
+            if reload_success:
+                dialog.format_secondary_text(
+                    "Configuration has been saved and applied.\n"
+                    "The service reloaded settings successfully."
+                )
+            elif self.service_control.is_running():
+                dialog.format_secondary_text(
+                    "Configuration has been saved.\n"
+                    "Note: Failed to reload service. You may need to restart it manually."
+                )
+            else:
+                dialog.format_secondary_text(
+                    "Configuration has been saved.\n"
+                    "Start the service to apply the changes."
+                )
+
             dialog.run()
             dialog.destroy()
         else:
@@ -986,7 +1039,7 @@ class SystemTrayIndicator:
     def on_settings_clicked(self, item):
         """Open settings window"""
         window = SettingsWindow()
-        window.connect("destroy", Gtk.main_quit)
+        # Don't connect destroy to main_quit - let the window close without killing the tray
         window.show_all()
 
     def on_toggle_clicked(self, item):
