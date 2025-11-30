@@ -290,6 +290,15 @@ class BrightnessAdapter:
         self.current_target = None
         self.last_sensor_value = None
 
+    def reload_config(self, config: dict):
+        """Reload configuration without restarting"""
+        self.config = config
+        self.smoothing_factor = config.get('smoothing_factor', 0.3)
+        self.update_interval = config.get('update_interval', 2.0)
+        self.min_brightness = config.get('min_brightness', 10)
+        self.max_brightness = config.get('max_brightness', 100)
+        logger.info(f"Configuration reloaded: smoothing={self.smoothing_factor}, interval={self.update_interval}s, brightness={self.min_brightness}-{self.max_brightness}%")
+
     def map_light_to_brightness(self, light_level: float) -> int:
         """Map light level (0-100) to brightness (0-100)"""
 
@@ -369,11 +378,27 @@ class AmbientBrightnessService:
         # Setup signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGHUP, self._reload_handler)
 
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals"""
         logger.info("Received shutdown signal")
         self.stop()
+
+    def _reload_handler(self, signum, frame):
+        """Handle configuration reload signal (SIGHUP)"""
+        logger.info("Received reload signal (SIGHUP)")
+        self.reload_config()
+
+    def reload_config(self):
+        """Reload configuration from file"""
+        try:
+            config = load_config()
+            self.config = config
+            self.adapter.reload_config(config)
+            logger.info("Configuration reloaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to reload configuration: {e}")
 
     def run(self):
         """Main service loop"""
