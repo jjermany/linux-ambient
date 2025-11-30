@@ -66,9 +66,20 @@ fi
 # Install systemd user service (if available)
 echo "Installing systemd user service..."
 if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/dev/null 2>&1; then
-    cp ambient-brightness.service ~/.config/systemd/user/
-    systemctl --user daemon-reload
-    echo "✅ systemd user service installed"
+    if [ -f ambient-brightness.service ]; then
+        cp ambient-brightness.service ~/.config/systemd/user/
+        systemctl --user daemon-reload
+        # Verify installation
+        if [ -f ~/.config/systemd/user/ambient-brightness.service ]; then
+            echo "✅ systemd user service installed successfully"
+        else
+            echo "❌ Failed to install service file to ~/.config/systemd/user/"
+            echo "  Run ./fix-service-installation.sh to fix this issue"
+        fi
+    else
+        echo "❌ Service file not found in repository"
+        echo "  Run ./fix-service-installation.sh to create and install it"
+    fi
 else
     echo "⚠ systemd not available - service will run in standalone mode"
     echo "  Use the GUI application to start/stop the service"

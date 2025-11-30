@@ -407,6 +407,26 @@ ls -l ~/.config/systemd/user/ambient-brightness.service
 systemctl --user daemon-reload
 ```
 
+**If service file is missing:**
+
+If you see errors like "No such file or directory" for the service file or "-- No entries --" in the logs, the service file wasn't properly installed. Run the fix script:
+
+```bash
+cd linux-ambient
+./fix-service-installation.sh
+```
+
+This will:
+- Create the systemd user directory if missing
+- Copy or recreate the service file
+- Reload the systemd daemon
+- Verify the installation
+
+After running the fix script, try starting the service again:
+```bash
+systemctl --user start ambient-brightness
+```
+
 **If systemd is not available:**
 The service will automatically run in standalone mode. Use the GUI application to start the service, or:
 
