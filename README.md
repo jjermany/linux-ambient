@@ -63,7 +63,40 @@ That's it! **No password prompts needed** for normal operation. The GUI will gui
 
 Choose one of the following installation methods:
 
-### Method 1: One-Liner Install (Easiest)
+### Method 1: Debian Package (Recommended for Linux Mint/Ubuntu/Debian)
+
+**NEW!** Install via .deb package for the easiest installation and uninstallation:
+
+1. **Download the latest .deb package** from the [Releases page](https://github.com/jjermany/linux-ambient/releases)
+
+2. **Install by double-clicking** the .deb file in your file manager, or via command line:
+   ```bash
+   sudo dpkg -i ambient-brightness_1.0.0_all.deb
+   sudo apt-get install -f  # Install dependencies if needed
+   ```
+
+3. **Add your user to the video group**:
+   ```bash
+   sudo usermod -aG video $USER
+   # Log out and back in for group changes to take effect
+   ```
+
+4. **Open the GUI** from your application menu or run `ambient-brightness-gui`
+
+**Benefits:**
+- ✅ Shows up in Linux Mint/Ubuntu Software Manager
+- ✅ Easy uninstallation via package manager (right-click → Uninstall)
+- ✅ Automatic dependency management
+- ✅ Proper integration with system package database
+
+**To build the .deb package yourself:**
+```bash
+git clone https://github.com/jjermany/linux-ambient.git
+cd linux-ambient
+./build-deb.sh
+```
+
+### Method 2: One-Liner Install
 
 Download and install automatically with a single command:
 
@@ -86,7 +119,7 @@ wget -qO- https://raw.githubusercontent.com/jjermany/linux-ambient/main/quick-in
 - Configure udev rules for backlight permissions
 - Clean up temporary files
 
-### Method 2: Using Makefile (Recommended for Developers)
+### Method 3: Using Makefile (Recommended for Developers)
 
 After cloning/downloading the repository:
 
@@ -104,7 +137,7 @@ This will:
 - Add GUI desktop entries
 - Set up udev rules for backlight permissions
 
-### Method 3: Manual Installation
+### Method 4: Manual Installation
 
 For complete control over the installation process:
 
@@ -485,13 +518,42 @@ ls -la /dev/video*
 
 ## Uninstallation
 
+The uninstallation method depends on how you installed:
+
+### If installed via Debian Package
+
+**Easiest method - Use the package manager:**
+
+1. **Via GUI**: Right-click on "Ambient Brightness Settings" in your application menu → Uninstall
+2. **Via Software Manager**: Open Software Manager, search for "ambient-brightness", click Uninstall
+3. **Via command line**:
+   ```bash
+   sudo apt remove ambient-brightness
+   # Or to remove config files too:
+   sudo apt purge ambient-brightness
+   ```
+
+✅ This will cleanly remove all installed files and show up properly in your package manager!
+
+### If installed via script or Makefile
+
 **Option 1: Using the uninstall script (recommended)**
 
+The improved uninstall script automatically detects both user-level and system-level installations:
+
 ```bash
+cd linux-ambient
 ./uninstall.sh
 ```
 
-**Option 2: Manual removal**
+For system-level installations (installed with `sudo make install`):
+```bash
+sudo ./uninstall.sh
+# Or use:
+sudo make uninstall
+```
+
+**Option 2: Manual removal (user-level installation)**
 
 ```bash
 # Stop and disable the service
@@ -499,11 +561,11 @@ systemctl --user stop ambient-brightness
 systemctl --user disable ambient-brightness
 
 # Remove installed files
-rm -rf ~/.local/bin/ambient_brightness.py
-rm -rf ~/.local/bin/ambient-brightness-gui
-rm -rf ~/.config/systemd/user/ambient-brightness.service
-rm -rf ~/.local/share/applications/ambient-brightness-settings.desktop
-rm -rf ~/.config/autostart/ambient-brightness-tray.desktop
+rm -f ~/.local/bin/ambient_brightness.py
+rm -f ~/.local/bin/ambient-brightness-gui
+rm -f ~/.config/systemd/user/ambient-brightness.service
+rm -f ~/.local/share/applications/ambient-brightness-settings.desktop
+rm -f ~/.config/autostart/ambient-brightness-tray.desktop
 
 # Reload systemd
 systemctl --user daemon-reload
@@ -512,10 +574,27 @@ systemctl --user daemon-reload
 rm -rf ~/.config/ambient-brightness
 ```
 
-To remove udev rules (requires sudo):
+**Option 3: Manual removal (system-level installation)**
+
 ```bash
+# Stop and disable the service
+sudo systemctl stop ambient-brightness
+sudo systemctl disable ambient-brightness
+
+# Remove installed files
+sudo rm -f /usr/local/bin/ambient_brightness.py
+sudo rm -f /usr/local/bin/ambient-brightness-gui
+sudo rm -f /etc/systemd/system/ambient-brightness.service
+sudo rm -f /usr/share/applications/ambient-brightness-settings.desktop
+sudo rm -f /etc/xdg/autostart/ambient-brightness-tray.desktop
 sudo rm -f /etc/udev/rules.d/90-backlight.rules
+
+# Reload systemd and udev
+sudo systemctl daemon-reload
 sudo udevadm control --reload-rules
+
+# Optional: Remove system configuration
+sudo rm -rf /etc/ambient-brightness
 ```
 
 ## Architecture
