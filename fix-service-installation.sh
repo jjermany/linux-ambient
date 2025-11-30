@@ -73,13 +73,29 @@ echo ""
 
 # Check if main script is installed
 MAIN_SCRIPT="$HOME/.local/bin/ambient_brightness.py"
+SOURCE_SCRIPT="$SCRIPT_DIR/ambient_brightness.py"
+
 if [ ! -f "$MAIN_SCRIPT" ]; then
     echo "⚠️  WARNING: Main script not found at: $MAIN_SCRIPT"
-    echo "   You may need to run the full installation:"
-    echo "   ./install.sh"
-    echo ""
+
+    if [ -f "$SOURCE_SCRIPT" ]; then
+        echo "   Installing main script from repository..."
+        mkdir -p "$HOME/.local/bin"
+        cp "$SOURCE_SCRIPT" "$MAIN_SCRIPT"
+        chmod +x "$MAIN_SCRIPT"
+        echo "✅ Main script installed successfully"
+        echo ""
+    else
+        echo "❌ ERROR: Source script not found at: $SOURCE_SCRIPT"
+        echo "   Please ensure you're running this from the repository directory"
+        echo "   Or run the full installation: ./install.sh"
+        echo ""
+        exit 1
+    fi
 else
     echo "✅ Main script found at: $MAIN_SCRIPT"
+    # Ensure it has execute permissions
+    chmod +x "$MAIN_SCRIPT"
     echo ""
 fi
 

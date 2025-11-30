@@ -4,6 +4,8 @@ Documentation=https://github.com/jjermany/linux-ambient
 
 [Service]
 Type=simple
+# Check if the executable exists before starting
+ExecStartPre=/bin/sh -c 'test -x "%h/.local/bin/ambient_brightness.py" || (echo "ERROR: ambient_brightness.py not found or not executable at %h/.local/bin/"; echo "Please run: ./install.sh"; exit 1)'
 ExecStart=%h/.local/bin/ambient_brightness.py
 Restart=on-failure
 RestartSec=5s
