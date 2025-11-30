@@ -15,21 +15,27 @@ USER_SERVICE_DIR="$HOME/.config/systemd/user"
 TARGET_SERVICE_FILE="$USER_SERVICE_DIR/ambient-brightness.service"
 
 # Check if systemd is available
-if ! command -v systemctl >/dev/null 2>&1; then
+SYSTEMD_AVAILABLE=false
+if command -v systemctl >/dev/null 2>&1; then
+    # Check if we can communicate with systemd user session
+    # We use 'list-units' instead of 'is-system-running' because the latter
+    # can fail even when systemd is functional (e.g., in degraded state)
+    if systemctl --user list-units >/dev/null 2>&1; then
+        SYSTEMD_AVAILABLE=true
+        echo "✅ systemd is available"
+        echo ""
+    else
+        echo "⚠️  systemd found but user session may not be fully initialized"
+        echo "   Attempting installation anyway..."
+        echo ""
+        SYSTEMD_AVAILABLE=true
+    fi
+else
     echo "❌ systemctl command not found"
     echo "   This system doesn't appear to have systemd installed."
     echo "   The service will run in standalone mode via the GUI."
     exit 1
 fi
-
-if ! systemctl --user is-system-running >/dev/null 2>&1; then
-    echo "❌ systemd user session is not running"
-    echo "   The service will run in standalone mode via the GUI."
-    exit 1
-fi
-
-echo "✅ systemd is available"
-echo ""
 
 # Create user systemd directory if it doesn't exist
 if [ ! -d "$USER_SERVICE_DIR" ]; then

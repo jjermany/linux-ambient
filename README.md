@@ -201,6 +201,49 @@ cp ambient-brightness-tray.desktop ~/.config/autostart/
 update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
 ```
 
+### Verifying Installation
+
+After installation, verify everything is set up correctly:
+
+```bash
+./verify-installation.sh
+```
+
+This will check:
+- ✅ Main executable installed and executable
+- ✅ GUI application installed
+- ✅ Configuration file exists
+- ✅ systemd service properly configured
+- ✅ Desktop entries installed
+- ✅ Python dependencies available
+- ✅ Backlight permissions configured
+
+**If verification fails**, the script will provide specific commands to fix each issue.
+
+### Troubleshooting Installation
+
+If you encounter issues:
+
+1. **Service fails to start (exit code 203)**:
+   ```bash
+   # Run the fix script
+   ./fix-service-installation.sh
+   ```
+   This automatically installs missing components and verifies the installation.
+
+2. **"systemd user session not running"**:
+   - This is usually fine - the GUI will run the service in standalone mode
+   - The service will still work, just managed differently
+
+3. **Permission errors**:
+   ```bash
+   # Add yourself to the video group
+   sudo usermod -aG video $USER
+   # Log out and log back in for changes to take effect
+   ```
+
+4. **For detailed troubleshooting**, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
 ## Usage
 
 ### GUI Application (Recommended)

@@ -48,22 +48,32 @@ if $FOUND_USER_INSTALL; then
     echo "Removing user-level installation..."
     echo ""
 
-    # Stop and disable the user service
-    if systemctl --user is-active --quiet ambient-brightness 2>/dev/null; then
-        echo "Stopping user service..."
-        systemctl --user stop ambient-brightness 2>/dev/null || true
-    fi
+    # Stop and disable the user service (if systemd is available)
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl --user list-units >/dev/null 2>&1; then
+            if systemctl --user is-active --quiet ambient-brightness 2>/dev/null; then
+                echo "Stopping user service..."
+                systemctl --user stop ambient-brightness 2>/dev/null || true
+            fi
 
-    if systemctl --user is-enabled --quiet ambient-brightness 2>/dev/null; then
-        echo "Disabling user service..."
-        systemctl --user disable ambient-brightness 2>/dev/null || true
-    fi
+            if systemctl --user is-enabled --quiet ambient-brightness 2>/dev/null; then
+                echo "Disabling user service..."
+                systemctl --user disable ambient-brightness 2>/dev/null || true
+            fi
 
-    # Remove user service file
-    if [ -f ~/.config/systemd/user/ambient-brightness.service ]; then
-        echo "Removing systemd service file..."
-        rm -f ~/.config/systemd/user/ambient-brightness.service
-        systemctl --user daemon-reload 2>/dev/null || true
+            # Remove user service file
+            if [ -f ~/.config/systemd/user/ambient-brightness.service ]; then
+                echo "Removing systemd service file..."
+                rm -f ~/.config/systemd/user/ambient-brightness.service
+                systemctl --user daemon-reload 2>/dev/null || true
+            fi
+        fi
+    else
+        # Just remove the service file without systemctl
+        if [ -f ~/.config/systemd/user/ambient-brightness.service ]; then
+            echo "Removing systemd service file..."
+            rm -f ~/.config/systemd/user/ambient-brightness.service
+        fi
     fi
 
     # Remove scripts
