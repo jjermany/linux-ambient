@@ -170,13 +170,37 @@ class CameraSensor(SensorReader):
             self.camera.release()
 
 
+class DemoSensor(SensorReader):
+    """Demo sensor for testing in environments without hardware"""
+
+    def __init__(self):
+        self.available = True
+        self.simulated_light = 50.0
+        logger.info("Using demo sensor (no hardware detected)")
+
+    def read_light_level(self) -> Optional[float]:
+        """Return simulated light level that varies over time"""
+        import math
+        # Simulate varying light conditions
+        self.simulated_light = 50 + 30 * math.sin(time.time() / 10)
+        return max(0, min(100, self.simulated_light))
+
+    def is_available(self) -> bool:
+        return self.available
+
+
 class BrightnessController:
     """Control screen brightness via /sys/class/backlight"""
 
-    def __init__(self):
+    def __init__(self, demo_mode=False):
         self.backlight_path = None
         self.max_brightness = 100
-        self._detect_backlight()
+        self.demo_mode = demo_mode
+        self.demo_brightness = 50
+        if not demo_mode:
+            self._detect_backlight()
+        else:
+            logger.info("Using demo brightness controller (no hardware detected)")
 
     def _detect_backlight(self):
         """Detect backlight device"""
@@ -203,6 +227,9 @@ class BrightnessController:
 
     def get_current_brightness(self) -> Optional[int]:
         """Get current brightness (0-100 scale)"""
+        if self.demo_mode:
+            return self.demo_brightness
+
         if not self.backlight_path:
             return None
 
@@ -217,6 +244,11 @@ class BrightnessController:
 
     def set_brightness(self, level: int) -> bool:
         """Set brightness (0-100 scale)"""
+        if self.demo_mode:
+            level = max(1, min(100, level))
+            self.demo_brightness = level
+            return True
+
         if not self.backlight_path:
             return False
 
@@ -241,7 +273,7 @@ class BrightnessController:
             return False
 
     def is_available(self) -> bool:
-        return self.backlight_path is not None
+        return self.demo_mode or self.backlight_path is not None
 
 
 class BrightnessAdapter:
@@ -298,11 +330,25 @@ class AmbientBrightnessService:
     def __init__(self, config: dict):
         self.config = config
         self.running = False
+        self.demo_mode = config.get('demo_mode', False)
 
-        # Initialize components
+        # Check if hardware is available
         self.als_sensor = ALSSensor()
         self.camera_sensor = CameraSensor() if config.get('enable_camera', True) else None
-        self.brightness_controller = BrightnessController()
+
+        # Determine if we need demo mode
+        has_sensor = self.als_sensor.is_available() or (self.camera_sensor and self.camera_sensor.is_available())
+        if not has_sensor and not self.demo_mode:
+            logger.warning("No hardware sensors found, enabling demo mode")
+            self.demo_mode = True
+
+        # Initialize brightness controller with correct demo mode
+        temp_controller = BrightnessController(demo_mode=False)
+        if not temp_controller.is_available() and not self.demo_mode:
+            logger.warning("No brightness control hardware found, enabling demo mode")
+            self.demo_mode = True
+
+        self.brightness_controller = BrightnessController(demo_mode=self.demo_mode)
         self.adapter = BrightnessAdapter(config)
 
         # Select sensor
@@ -314,8 +360,7 @@ class AmbientBrightnessService:
             self.sensor = self.camera_sensor
             logger.info("Using camera as fallback sensor")
         else:
-            logger.error("No sensors available!")
-            sys.exit(1)
+            self.sensor = DemoSensor()
 
         if not self.brightness_controller.is_available():
             logger.error("Brightness control not available!")
