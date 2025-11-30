@@ -1,0 +1,32 @@
+#!/bin/bash
+# Post-removal script for ambient-brightness package
+
+set -e
+
+# Only run on purge (complete removal)
+if [ "$1" = "purge" ]; then
+    # Remove udev rules
+    if [ -f /etc/udev/rules.d/90-backlight.rules ]; then
+        rm -f /etc/udev/rules.d/90-backlight.rules
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules 2>/dev/null || true
+        fi
+    fi
+
+    # Update desktop database
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications 2>/dev/null || true
+    fi
+
+    # Reload systemd daemon for all users
+    if command -v systemctl >/dev/null 2>&1; then
+        for user_id in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $1}'); do
+            username="$(loginctl show-user "$user_id" -p Name --value 2>/dev/null)"
+            if [ -n "$username" ]; then
+                su - "$username" -c "systemctl --user daemon-reload 2>/dev/null || true" 2>/dev/null || true
+            fi
+        done
+    fi
+fi
+
+exit 0

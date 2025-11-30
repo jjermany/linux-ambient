@@ -1,0 +1,54 @@
+#!/bin/bash
+# Post-installation script for ambient-brightness package
+
+set -e
+
+# Set up udev rules for backlight permissions
+if [ -d /etc/udev/rules.d ]; then
+    cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
+# Allow users in video group to control backlight
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+EOF
+
+    # Reload udev rules
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload-rules 2>/dev/null || true
+        udevadm trigger --subsystem-match=backlight 2>/dev/null || true
+    fi
+fi
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+
+# Reload systemd daemon (for user services)
+if command -v systemctl >/dev/null 2>&1; then
+    # Reload for all users that have a systemd user instance running
+    for user_id in $(loginctl list-users --no-legend | awk '{print $1}'); do
+        su - "$(loginctl show-user "$user_id" -p Name --value)" -c "systemctl --user daemon-reload" 2>/dev/null || true
+    done
+fi
+
+echo ""
+echo "========================================="
+echo "Ambient Brightness installed successfully!"
+echo "========================================="
+echo ""
+echo "To get started:"
+echo "  1. Add your user to the 'video' group:"
+echo "     sudo usermod -aG video \$USER"
+echo "     (then log out and back in)"
+echo ""
+echo "  2. Open 'Ambient Brightness Settings' from your application menu"
+echo "     Or run: ambient-brightness-gui"
+echo ""
+echo "  3. Use the GUI to start the service and configure settings"
+echo ""
+echo "For command-line usage:"
+echo "  systemctl --user start ambient-brightness"
+echo "  systemctl --user enable ambient-brightness"
+echo ""
+
+exit 0

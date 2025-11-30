@@ -1,0 +1,20 @@
+Package: ambient-brightness
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.6), python3-gi, gir1.2-gtk-3.0, gir1.2-appindicator3-0.1, systemd
+Recommends: python3-opencv, python3-numpy
+Maintainer: linux-ambient <https://github.com/jjermany/linux-ambient>
+Homepage: https://github.com/jjermany/linux-ambient
+Description: Automatic screen brightness adjustment for Linux
+ Ambient Brightness Control provides automatic screen brightness adjustment
+ using ambient light sensors or camera, similar to smartphones and macOS.
+ .
+ Features:
+  - Graphical User Interface with real-time monitoring
+  - System Tray Integration
+  - Dual sensor support (ALS or camera fallback)
+  - Smart brightness algorithm
+  - Runs as user systemd service
+  - No root access needed for normal operation
