@@ -149,19 +149,16 @@ class ServiceControl:
     def _check_systemd_available() -> bool:
         """Check if systemd is available and working"""
         try:
+            # Use 'list-units' instead of 'is-system-running' because the latter
+            # can fail even when systemd is functional (e.g., in degraded state)
             result = subprocess.run(
-                ['systemctl', '--user', 'is-system-running'],
+                ['systemctl', '--user', 'list-units'],
                 capture_output=True,
                 text=True,
                 timeout=2
             )
-            # Check both return code and output
-            # "offline" or "unknown" means systemd user services are not available
-            output = result.stdout.strip().lower()
-            if output in ['offline', 'unknown']:
-                return False
-            # systemd is available if state is running, degraded, or similar
-            return result.returncode in [0, 1]  # 0 = running, 1 = degraded but working
+            # If we can list units, systemd is available
+            return result.returncode == 0
         except:
             return False
 
