@@ -113,6 +113,8 @@ The installer will:
 
 **That's it!** No confusing choices, no multiple methods.
 
+**Note:** After installation, you need to **log out and log back in** (not restart) for the video group membership to take effect. The system tray icon will then appear automatically on login.
+
 ### Advanced: System-wide Installation
 
 For system administrators who want to install for all users:

@@ -245,10 +245,24 @@ echo "========================================="
 echo ""
 echo "✓ Ambient Brightness Control is now installed!"
 echo ""
-echo "To use:"
-echo "  1. Open 'Ambient Brightness Settings' from your application menu"
-echo "  2. Or run: ambient-brightness-gui"
-echo "  3. Use the GUI to start the service and adjust settings"
+
+# Track if we need to log out
+NEED_LOGOUT=false
+if ! groups | grep -q video; then
+    NEED_LOGOUT=true
+fi
+
+echo "Quick Start (RIGHT NOW):"
+echo "  1. Run: ambient-brightness-gui"
+echo "  2. Click 'Start Service' in the GUI"
+echo ""
+echo "System Tray Icon:"
+echo "  • Will auto-start on next login"
+if $NEED_LOGOUT; then
+    echo "  • To start it now: Log out and back in first (for video group)"
+else
+    echo "  • To start it now: ambient-brightness-gui --tray &"
+fi
 echo ""
 
 if command -v systemctl >/dev/null 2>&1 && systemctl --user list-units >/dev/null 2>&1; then
@@ -259,12 +273,22 @@ if command -v systemctl >/dev/null 2>&1 && systemctl --user list-units >/dev/nul
     echo ""
 fi
 
-if ! groups | grep -q video; then
-    echo "⚠ REMEMBER: Log out and log back in for group changes to take effect!"
+if $NEED_LOGOUT; then
+    echo "========================================="
+    echo "⚠  ACTION REQUIRED"
+    echo "========================================="
+    echo ""
+    echo "You were added to the 'video' group."
+    echo ""
+    echo "LOG OUT and LOG BACK IN for this to take effect."
+    echo "(You do NOT need to restart your PC - just log out)"
+    echo ""
+    echo "After logging back in:"
+    echo "  • The system tray icon will appear automatically"
+    echo "  • The service will have permission to control brightness"
     echo ""
 fi
 
 echo "Configuration file: ~/.config/ambient-brightness/config.conf"
-echo ""
 echo "To uninstall: ./complete-uninstall.sh"
 echo ""
