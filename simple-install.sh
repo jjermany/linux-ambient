@@ -252,27 +252,6 @@ if ! groups | grep -q video; then
     NEED_LOGOUT=true
 fi
 
-echo "Quick Start (RIGHT NOW):"
-echo "  1. Run: ambient-brightness-gui"
-echo "  2. Click 'Start Service' in the GUI"
-echo ""
-echo "System Tray Icon:"
-echo "  • Will auto-start on next login"
-if $NEED_LOGOUT; then
-    echo "  • To start it now: Log out and back in first (for video group)"
-else
-    echo "  • To start it now: ambient-brightness-gui --tray &"
-fi
-echo ""
-
-if command -v systemctl >/dev/null 2>&1 && systemctl --user list-units >/dev/null 2>&1; then
-    echo "Or use systemd commands:"
-    echo "  systemctl --user start ambient-brightness    (start service)"
-    echo "  systemctl --user enable ambient-brightness   (auto-start at login)"
-    echo "  systemctl --user status ambient-brightness   (check status)"
-    echo ""
-fi
-
 if $NEED_LOGOUT; then
     echo "========================================="
     echo "⚠  ACTION REQUIRED"
@@ -285,10 +264,49 @@ if $NEED_LOGOUT; then
     echo ""
     echo "After logging back in:"
     echo "  • The system tray icon will appear automatically"
+    echo "  • The GUI will be available in your application menu"
     echo "  • The service will have permission to control brightness"
     echo ""
-fi
+    echo "Configuration file: ~/.config/ambient-brightness/config.conf"
+    echo "To uninstall: ./complete-uninstall.sh"
+    echo ""
+else
+    # Already in video group - can start everything now!
+    echo "🚀 Starting Ambient Brightness now..."
+    echo ""
 
-echo "Configuration file: ~/.config/ambient-brightness/config.conf"
-echo "To uninstall: ./complete-uninstall.sh"
-echo ""
+    # Check if ~/.local/bin is in PATH for this session
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+
+    # Start the system tray in the background
+    if command -v ambient-brightness-gui >/dev/null 2>&1; then
+        nohup ambient-brightness-gui --tray > /dev/null 2>&1 &
+        sleep 1
+        if pgrep -f "ambient-brightness-gui --tray" > /dev/null; then
+            echo "✓ System tray icon started!"
+        else
+            echo "⚠ Could not start tray icon automatically"
+            echo "  Start manually: ambient-brightness-gui --tray &"
+        fi
+    fi
+
+    echo ""
+    echo "Quick Start:"
+    echo "  • System tray icon is now running (look for it in your system tray)"
+    echo "  • Click it to start the service and adjust settings"
+    echo "  • Or run: ambient-brightness-gui"
+    echo ""
+
+    if command -v systemctl >/dev/null 2>&1 && systemctl --user list-units >/dev/null 2>&1; then
+        echo "Or use systemd commands:"
+        echo "  systemctl --user start ambient-brightness    (start service)"
+        echo "  systemctl --user enable ambient-brightness   (auto-start at login)"
+        echo ""
+    fi
+
+    echo "Configuration file: ~/.config/ambient-brightness/config.conf"
+    echo "To uninstall: ./complete-uninstall.sh"
+    echo ""
+fi
