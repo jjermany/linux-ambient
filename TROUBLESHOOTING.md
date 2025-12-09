@@ -4,10 +4,88 @@ This guide helps you diagnose and fix common issues with Ambient Brightness Cont
 
 ## Table of Contents
 
-1. [Service Won't Start (Exit Code 203)](#service-wont-start-exit-code-203)
-2. [Service Fails Immediately After Starting](#service-fails-immediately-after-starting)
-3. [Permission Denied Errors](#permission-denied-errors)
-4. [No Ambient Light Sensor Detected](#no-ambient-light-sensor-detected)
+1. [Duplicate System Tray Icons](#duplicate-system-tray-icons)
+2. [Service Won't Start (Exit Code 203)](#service-wont-start-exit-code-203)
+3. [Service Fails Immediately After Starting](#service-fails-immediately-after-starting)
+4. [Permission Denied Errors](#permission-denied-errors)
+5. [No Ambient Light Sensor Detected](#no-ambient-light-sensor-detected)
+
+---
+
+## Duplicate System Tray Icons
+
+### Symptoms
+
+You see two (or more) identical system tray icons for Ambient Brightness Control.
+
+### Cause
+
+This happens when the tray application is started from multiple locations:
+1. **System-wide autostart file** at `/etc/xdg/autostart/ambient-brightness-tray.desktop`
+2. **User-level autostart file** at `~/.config/autostart/ambient-brightness-tray.desktop`
+
+This typically occurs when:
+- You installed both a system-wide package (.deb) AND ran the user-level install script
+- A previous installation wasn't fully cleaned up before reinstalling
+- Old installation files remain from a different installation method
+
+### Solution
+
+**Quick Fix (Recommended):**
+```bash
+cd /path/to/linux-ambient
+./fix-duplicate-tray.sh
+```
+
+This script will:
+- Detect all autostart files (system-wide and user-level)
+- Identify conflicts
+- Offer to remove duplicates
+- Restart a single tray instance
+
+**Manual Fix:**
+
+1. Check for duplicate files:
+```bash
+ls -l /etc/xdg/autostart/ambient-brightness-tray.desktop 2>/dev/null
+ls -l ~/.config/autostart/ambient-brightness-tray.desktop 2>/dev/null
+```
+
+2. Remove the system-wide file (recommended to keep user-level only):
+```bash
+sudo rm /etc/xdg/autostart/ambient-brightness-tray.desktop
+```
+
+3. Kill existing tray instances:
+```bash
+pkill -f "ambient-brightness-gui --tray"
+```
+
+4. Log out and log back in, or manually start the tray:
+```bash
+ambient-brightness-gui --tray &
+```
+
+### Prevention
+
+The latest version includes a singleton check that prevents multiple instances from starting. To update your installation:
+```bash
+cd /path/to/linux-ambient
+git pull
+./install.sh
+```
+
+After updating, the tray desktop file will automatically prevent duplicate instances even if multiple autostart files exist.
+
+### Verification
+
+After applying the fix:
+```bash
+# Check for running instances (should show only 1)
+pgrep -fa "ambient-brightness-gui --tray"
+
+# Should show only one process
+```
 
 ---
 

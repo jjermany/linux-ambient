@@ -106,6 +106,22 @@ fi
 
 # Install desktop entries
 echo "Installing desktop entries..."
+
+# Check for and warn about system-wide autostart files
+if [ -f /etc/xdg/autostart/ambient-brightness-tray.desktop ]; then
+    echo "⚠️  WARNING: System-wide autostart file detected at /etc/xdg/autostart/ambient-brightness-tray.desktop"
+    echo "  This can cause duplicate tray icons. Removing it requires sudo:"
+    echo "  sudo rm /etc/xdg/autostart/ambient-brightness-tray.desktop"
+    echo ""
+fi
+
+if [ -f /usr/share/applications/ambient-brightness-settings.desktop ]; then
+    echo "⚠️  WARNING: System-wide application file detected at /usr/share/applications/ambient-brightness-settings.desktop"
+    echo "  This might conflict with the user installation. To remove it, run:"
+    echo "  sudo rm /usr/share/applications/ambient-brightness-settings.desktop"
+    echo ""
+fi
+
 cp ambient-brightness-settings.desktop ~/.local/share/applications/
 cp ambient-brightness-tray.desktop ~/.config/autostart/
 update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
