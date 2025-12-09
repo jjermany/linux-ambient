@@ -113,7 +113,24 @@ The installer will:
 
 **That's it!** No confusing choices, no multiple methods.
 
-**Note:** After installation, you need to **log out and log back in** (not restart) for the video group membership to take effect. The system tray icon will then appear automatically on login.
+### What Happens After Installation?
+
+The installer automatically handles everything for you:
+
+**If you're already in the video group:**
+- ✅ System tray icon starts **immediately** after installation
+- ✅ No logout needed!
+- ✅ Just click the tray icon to start the service
+
+**If you need to be added to the video group:**
+- ⚠️ Log out and log back in (not a full restart)
+- ✅ System tray icon appears automatically on next login
+- ✅ Everything works after logging back in
+
+**When using the GUI:**
+- Click "Start Service" → Tray icon appears automatically
+- Enable "Start at boot" → Tray icon appears automatically
+- No need to manually start the tray!
 
 ### Advanced: System-wide Installation
 
