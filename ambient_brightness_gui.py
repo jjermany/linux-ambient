@@ -226,8 +226,8 @@ class ServiceControl:
             except:
                 return False
         else:
-            # For standalone, check if autostart file exists
-            autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-service.desktop'
+            # For standalone, check if autostart tray file exists
+            autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
             return autostart_file.exists()
 
     def start(self) -> bool:
@@ -373,18 +373,22 @@ class ServiceControl:
             except:
                 return False
         else:
-            # Create autostart desktop entry
+            # Create autostart desktop entry for tray icon
             try:
                 autostart_dir = Path.home() / '.config' / 'autostart'
                 autostart_dir.mkdir(parents=True, exist_ok=True)
 
-                autostart_file = autostart_dir / 'ambient-brightness-service.desktop'
+                autostart_file = autostart_dir / 'ambient-brightness-tray.desktop'
+                # Get the GUI path
+                gui_path = Path(__file__).resolve()
                 content = f"""[Desktop Entry]
 Type=Application
-Name=Ambient Brightness Service
-Exec={sys.executable} {self.script_path}
-Hidden=false
-NoDisplay=false
+Name=Ambient Brightness Tray
+Comment=System tray indicator for ambient brightness control
+Exec={sys.executable} {gui_path} --tray
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;
 X-GNOME-Autostart-enabled=true
 """
                 autostart_file.write_text(content)
@@ -405,7 +409,7 @@ X-GNOME-Autostart-enabled=true
         else:
             # Remove autostart desktop entry
             try:
-                autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-service.desktop'
+                autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
                 if autostart_file.exists():
                     autostart_file.unlink()
                 return True
@@ -796,7 +800,11 @@ class SettingsWindow(Gtk.Window):
         # Update button states
         self.start_btn.set_sensitive(not is_running)
         self.stop_btn.set_sensitive(is_running)
+
+        # Update checkbox without triggering signal
+        self.enable_check.handler_block_by_func(self.on_enable_toggled)
         self.enable_check.set_active(is_enabled)
+        self.enable_check.handler_unblock_by_func(self.on_enable_toggled)
 
         # Get sensor readings
         if is_running:
@@ -886,19 +894,33 @@ class SettingsWindow(Gtk.Window):
             dialog.run()
             dialog.destroy()
 
-    def ensure_tray_running(self):
-        """Ensure system tray icon is running"""
-        # Check if tray is already running
+    def is_tray_running(self) -> bool:
+        """Check if tray icon is running"""
         try:
             result = subprocess.run(
                 ['pgrep', '-f', 'ambient-brightness-gui --tray'],
                 capture_output=True,
                 timeout=2
             )
-            if result.returncode == 0:
-                return  # Already running
+            return result.returncode == 0
         except:
-            pass
+            return False
+
+    def stop_tray(self):
+        """Stop the system tray icon"""
+        try:
+            subprocess.run(
+                ['pkill', '-f', 'ambient-brightness-gui --tray'],
+                timeout=2
+            )
+        except Exception as e:
+            print(f"Could not stop tray icon: {e}")
+
+    def ensure_tray_running(self):
+        """Ensure system tray icon is running"""
+        # Check if tray is already running
+        if self.is_tray_running():
+            return  # Already running
 
         # Start the tray icon
         try:
@@ -940,16 +962,29 @@ class SettingsWindow(Gtk.Window):
     def on_enable_toggled(self, button):
         """Toggle service enable at boot"""
         if button.get_active():
+            # Enabling auto-start
             if not self.service_control.enable():
-                self.show_error("Failed to enable service")
+                self.show_error("Failed to enable auto-start")
                 button.set_active(False)
             else:
-                # Auto-start tray icon when enabling auto-start
+                # Auto-start tray icon immediately when enabling auto-start
                 self.ensure_tray_running()
+                self.show_message("Auto-start enabled. Tray icon started.")
         else:
+            # Disabling auto-start
             if not self.service_control.disable():
-                self.show_error("Failed to disable service")
+                self.show_error("Failed to disable auto-start")
                 button.set_active(True)
+            else:
+                # Stop the tray icon when disabling auto-start
+                if self.is_tray_running():
+                    self.stop_tray()
+                    self.show_message("Auto-start disabled. Tray icon stopped.")
+                else:
+                    self.show_message("Auto-start disabled.")
+
+        # Update status display
+        self.update_status()
 
     def on_refresh_logs_clicked(self, button):
         """Refresh service logs"""
