@@ -218,7 +218,10 @@ class ServiceControl:
         # The "Start automatically at boot" checkbox manages the tray icon,
         # not the systemd service itself
         autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
-        return autostart_file.exists()
+        exists = autostart_file.exists()
+        print(f"[DEBUG] is_enabled() checking: {autostart_file}")
+        print(f"[DEBUG] is_enabled() result: {exists}")
+        return exists
 
     def start(self) -> bool:
         """Start the service"""
@@ -357,13 +360,18 @@ class ServiceControl:
         """Enable tray icon to auto-start at boot"""
         # Always create tray autostart file, regardless of systemd
         # The checkbox manages the tray icon, not the systemd service
+        print("[DEBUG] enable() called")
         try:
             autostart_dir = Path.home() / '.config' / 'autostart'
             autostart_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[DEBUG] Created/verified directory: {autostart_dir}")
 
             autostart_file = autostart_dir / 'ambient-brightness-tray.desktop'
             # Get the GUI path
             gui_path = Path(__file__).resolve()
+            print(f"[DEBUG] GUI path: {gui_path}")
+            print(f"[DEBUG] sys.executable: {sys.executable}")
+
             content = f"""[Desktop Entry]
 Type=Application
 Name=Ambient Brightness Tray
@@ -375,22 +383,34 @@ Categories=Settings;
 X-GNOME-Autostart-enabled=true
 """
             autostart_file.write_text(content)
+            print(f"[DEBUG] Wrote file: {autostart_file}")
+            print(f"[DEBUG] File exists after write: {autostart_file.exists()}")
             return True
         except Exception as e:
-            print(f"Error enabling autostart: {e}")
+            print(f"[DEBUG] ERROR in enable(): {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def disable(self) -> bool:
         """Disable tray icon from auto-starting at boot"""
         # Always remove tray autostart file, regardless of systemd
         # The checkbox manages the tray icon, not the systemd service
+        print("[DEBUG] disable() called")
         try:
             autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
+            print(f"[DEBUG] Checking file: {autostart_file}")
             if autostart_file.exists():
                 autostart_file.unlink()
+                print(f"[DEBUG] Deleted file: {autostart_file}")
+            else:
+                print(f"[DEBUG] File didn't exist: {autostart_file}")
+            print(f"[DEBUG] File exists after delete: {autostart_file.exists()}")
             return True
         except Exception as e:
-            print(f"Error disabling autostart: {e}")
+            print(f"[DEBUG] ERROR in disable(): {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 
@@ -937,21 +957,28 @@ class SettingsWindow(Gtk.Window):
 
     def on_enable_toggled(self, button):
         """Toggle service enable at boot"""
+        print(f"[DEBUG] on_enable_toggled() called, button.get_active() = {button.get_active()}")
         if button.get_active():
             # Enabling auto-start
+            print("[DEBUG] User checked the box - calling enable()")
             if not self.service_control.enable():
+                print("[DEBUG] enable() failed!")
                 self.show_error("Failed to enable auto-start")
                 button.set_active(False)
             else:
+                print("[DEBUG] enable() succeeded!")
                 # Auto-start tray icon immediately when enabling auto-start
                 self.ensure_tray_running()
                 self.show_message("Auto-start enabled. Tray icon started.")
         else:
             # Disabling auto-start
+            print("[DEBUG] User unchecked the box - calling disable()")
             if not self.service_control.disable():
+                print("[DEBUG] disable() failed!")
                 self.show_error("Failed to disable auto-start")
                 button.set_active(True)
             else:
+                print("[DEBUG] disable() succeeded!")
                 # Stop the tray icon when disabling auto-start
                 if self.is_tray_running():
                     self.stop_tray()
@@ -960,6 +987,7 @@ class SettingsWindow(Gtk.Window):
                     self.show_message("Auto-start disabled.")
 
         # Update status display
+        print("[DEBUG] Calling update_status()")
         self.update_status()
 
     def on_refresh_logs_clicked(self, button):
