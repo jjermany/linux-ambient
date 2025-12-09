@@ -213,22 +213,12 @@ class ServiceControl:
             return self._read_pid() is not None
 
     def is_enabled(self) -> bool:
-        """Check if service is enabled"""
-        if self.use_systemd:
-            try:
-                result = subprocess.run(
-                    ['systemctl', '--user', 'is-enabled', 'ambient-brightness'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
-                return result.returncode == 0
-            except:
-                return False
-        else:
-            # For standalone, check if autostart tray file exists
-            autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
-            return autostart_file.exists()
+        """Check if tray icon is set to auto-start at boot"""
+        # Always check for tray autostart file, regardless of systemd
+        # The "Start automatically at boot" checkbox manages the tray icon,
+        # not the systemd service itself
+        autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
+        return autostart_file.exists()
 
     def start(self) -> bool:
         """Start the service"""
@@ -364,24 +354,17 @@ class ServiceControl:
                 return False
 
     def enable(self) -> bool:
-        """Enable service at boot"""
-        if self.use_systemd:
-            try:
-                subprocess.run(['systemctl', '--user', 'enable', 'ambient-brightness'],
-                             check=True, timeout=5)
-                return True
-            except:
-                return False
-        else:
-            # Create autostart desktop entry for tray icon
-            try:
-                autostart_dir = Path.home() / '.config' / 'autostart'
-                autostart_dir.mkdir(parents=True, exist_ok=True)
+        """Enable tray icon to auto-start at boot"""
+        # Always create tray autostart file, regardless of systemd
+        # The checkbox manages the tray icon, not the systemd service
+        try:
+            autostart_dir = Path.home() / '.config' / 'autostart'
+            autostart_dir.mkdir(parents=True, exist_ok=True)
 
-                autostart_file = autostart_dir / 'ambient-brightness-tray.desktop'
-                # Get the GUI path
-                gui_path = Path(__file__).resolve()
-                content = f"""[Desktop Entry]
+            autostart_file = autostart_dir / 'ambient-brightness-tray.desktop'
+            # Get the GUI path
+            gui_path = Path(__file__).resolve()
+            content = f"""[Desktop Entry]
 Type=Application
 Name=Ambient Brightness Tray
 Comment=System tray indicator for ambient brightness control
@@ -391,31 +374,24 @@ Terminal=false
 Categories=Settings;
 X-GNOME-Autostart-enabled=true
 """
-                autostart_file.write_text(content)
-                return True
-            except Exception as e:
-                print(f"Error enabling autostart: {e}")
-                return False
+            autostart_file.write_text(content)
+            return True
+        except Exception as e:
+            print(f"Error enabling autostart: {e}")
+            return False
 
     def disable(self) -> bool:
-        """Disable service at boot"""
-        if self.use_systemd:
-            try:
-                subprocess.run(['systemctl', '--user', 'disable', 'ambient-brightness'],
-                             check=True, timeout=5)
-                return True
-            except:
-                return False
-        else:
-            # Remove autostart desktop entry
-            try:
-                autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
-                if autostart_file.exists():
-                    autostart_file.unlink()
-                return True
-            except Exception as e:
-                print(f"Error disabling autostart: {e}")
-                return False
+        """Disable tray icon from auto-starting at boot"""
+        # Always remove tray autostart file, regardless of systemd
+        # The checkbox manages the tray icon, not the systemd service
+        try:
+            autostart_file = Path.home() / '.config' / 'autostart' / 'ambient-brightness-tray.desktop'
+            if autostart_file.exists():
+                autostart_file.unlink()
+            return True
+        except Exception as e:
+            print(f"Error disabling autostart: {e}")
+            return False
 
 
 class StatusMonitor:
