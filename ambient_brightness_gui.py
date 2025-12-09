@@ -809,26 +809,19 @@ class SettingsWindow(Gtk.Window):
         self.stop_btn.set_sensitive(is_running)
 
         # Update checkbox without triggering signal
-        try:
-            print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
+        print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
 
-            # Block the handler
-            self.enable_check.handler_block(self.enable_check_signal_id)
-            is_blocked = self.enable_check.handler_is_blocked(self.enable_check_signal_id)
-            print(f"[DEBUG] update_status() - handler blocked: {is_blocked} (signal ID: {self.enable_check_signal_id})")
+        # Block the handler
+        self.enable_check.handler_block(self.enable_check_signal_id)
+        print(f"[DEBUG] update_status() - handler blocked (signal ID: {self.enable_check_signal_id})")
 
-            # Update checkbox state
-            self.enable_check.set_active(is_enabled)
-            print(f"[DEBUG] update_status() - checkbox set to {is_enabled}")
+        # Update checkbox state
+        self.enable_check.set_active(is_enabled)
+        print(f"[DEBUG] update_status() - checkbox set to {is_enabled}")
 
-            # Unblock the handler
-            self.enable_check.handler_unblock(self.enable_check_signal_id)
-            is_blocked_after = self.enable_check.handler_is_blocked(self.enable_check_signal_id)
-            print(f"[DEBUG] update_status() - handler unblocked, still blocked: {is_blocked_after}")
-        except Exception as e:
-            print(f"[DEBUG] ERROR in update_status checkbox handling: {e}")
-            import traceback
-            traceback.print_exc()
+        # Unblock the handler
+        self.enable_check.handler_unblock(self.enable_check_signal_id)
+        print(f"[DEBUG] update_status() - handler unblocked (signal ID: {self.enable_check_signal_id})")
 
         # Get sensor readings
         if is_running:
@@ -959,10 +952,9 @@ class SettingsWindow(Gtk.Window):
 
     def on_checkbox_clicked(self, widget, event):
         """Debug handler to detect any clicks on the checkbox"""
-        print(f"[DEBUG] *** CHECKBOX CLICKED *** widget={widget}, event={event}")
-        print(f"[DEBUG] Current checkbox state: {self.enable_check.get_active()}")
-        print(f"[DEBUG] Handler blocked: {self.enable_check.handler_is_blocked(self.enable_check_signal_id)}")
-        return False  # Allow event to propagate
+        print(f"[DEBUG] *** CHECKBOX CLICKED *** event type={event.type}, button={event.button}")
+        print(f"[DEBUG] Current checkbox state BEFORE click: {self.enable_check.get_active()}")
+        return False  # Allow event to propagate so toggled signal can fire
 
     def on_start_clicked(self, button):
         """Start service"""
