@@ -743,8 +743,8 @@ class SettingsWindow(Gtk.Window):
         print(f"[DEBUG] Creating checkbox - initial state from is_enabled(): {initial_state}")
         self.enable_check.set_active(initial_state)
         print(f"[DEBUG] Checkbox set_active({initial_state}), actual state: {self.enable_check.get_active()}")
-        signal_id = self.enable_check.connect("toggled", self.on_enable_toggled)
-        print(f"[DEBUG] Signal connected with ID: {signal_id}")
+        self.enable_check_signal_id = self.enable_check.connect("toggled", self.on_enable_toggled)
+        print(f"[DEBUG] Signal connected with ID: {self.enable_check_signal_id}")
         control_box.pack_start(self.enable_check, False, False, 5)
 
         # Logs
@@ -804,12 +804,12 @@ class SettingsWindow(Gtk.Window):
         # Update checkbox without triggering signal
         try:
             print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
-            self.enable_check.handler_block_by_func(self.on_enable_toggled)
-            print(f"[DEBUG] update_status() - handler blocked")
+            self.enable_check.handler_block(self.enable_check_signal_id)
+            print(f"[DEBUG] update_status() - handler blocked (signal ID: {self.enable_check_signal_id})")
             self.enable_check.set_active(is_enabled)
             print(f"[DEBUG] update_status() - checkbox set to {is_enabled}")
-            self.enable_check.handler_unblock_by_func(self.on_enable_toggled)
-            print(f"[DEBUG] update_status() - handler unblocked")
+            self.enable_check.handler_unblock(self.enable_check_signal_id)
+            print(f"[DEBUG] update_status() - handler unblocked (signal ID: {self.enable_check_signal_id})")
         except Exception as e:
             print(f"[DEBUG] ERROR in update_status checkbox handling: {e}")
             import traceback
