@@ -739,8 +739,12 @@ class SettingsWindow(Gtk.Window):
 
         # Enable at boot
         self.enable_check = Gtk.CheckButton(label="Start automatically at boot")
-        self.enable_check.set_active(self.service_control.is_enabled())
-        self.enable_check.connect("toggled", self.on_enable_toggled)
+        initial_state = self.service_control.is_enabled()
+        print(f"[DEBUG] Creating checkbox - initial state from is_enabled(): {initial_state}")
+        self.enable_check.set_active(initial_state)
+        print(f"[DEBUG] Checkbox set_active({initial_state}), actual state: {self.enable_check.get_active()}")
+        signal_id = self.enable_check.connect("toggled", self.on_enable_toggled)
+        print(f"[DEBUG] Signal connected with ID: {signal_id}")
         control_box.pack_start(self.enable_check, False, False, 5)
 
         # Logs
@@ -798,9 +802,18 @@ class SettingsWindow(Gtk.Window):
         self.stop_btn.set_sensitive(is_running)
 
         # Update checkbox without triggering signal
-        self.enable_check.handler_block_by_func(self.on_enable_toggled)
-        self.enable_check.set_active(is_enabled)
-        self.enable_check.handler_unblock_by_func(self.on_enable_toggled)
+        try:
+            print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
+            self.enable_check.handler_block_by_func(self.on_enable_toggled)
+            print(f"[DEBUG] update_status() - handler blocked")
+            self.enable_check.set_active(is_enabled)
+            print(f"[DEBUG] update_status() - checkbox set to {is_enabled}")
+            self.enable_check.handler_unblock_by_func(self.on_enable_toggled)
+            print(f"[DEBUG] update_status() - handler unblocked")
+        except Exception as e:
+            print(f"[DEBUG] ERROR in update_status checkbox handling: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Get sensor readings
         if is_running:
