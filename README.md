@@ -408,6 +408,21 @@ cat /sys/class/backlight/*/max_brightness
 
 ## Troubleshooting
 
+### Duplicate System Tray Icons
+
+If you see two (or more) tray icons, this means multiple instances are starting from different locations. Quick fix:
+
+```bash
+cd linux-ambient
+./fix-duplicate-tray.sh
+```
+
+This typically happens when:
+- Both system-wide and user-level autostart files exist
+- Previous installation wasn't fully cleaned up
+
+For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#duplicate-system-tray-icons).
+
 ### Service Fails to Start with "Unit not found" Errors
 
 If you see errors like:
