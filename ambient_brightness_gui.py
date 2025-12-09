@@ -886,10 +886,37 @@ class SettingsWindow(Gtk.Window):
             dialog.run()
             dialog.destroy()
 
+    def ensure_tray_running(self):
+        """Ensure system tray icon is running"""
+        # Check if tray is already running
+        try:
+            result = subprocess.run(
+                ['pgrep', '-f', 'ambient-brightness-gui --tray'],
+                capture_output=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                return  # Already running
+        except:
+            pass
+
+        # Start the tray icon
+        try:
+            subprocess.Popen(
+                [sys.executable, __file__, '--tray'],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception as e:
+            print(f"Could not start tray icon: {e}")
+
     def on_start_clicked(self, button):
         """Start service"""
         if self.service_control.start():
             self.show_message("Service started successfully")
+            # Auto-start tray icon when service is started
+            self.ensure_tray_running()
         else:
             self.show_error("Failed to start service")
         self.update_status()
@@ -916,6 +943,9 @@ class SettingsWindow(Gtk.Window):
             if not self.service_control.enable():
                 self.show_error("Failed to enable service")
                 button.set_active(False)
+            else:
+                # Auto-start tray icon when enabling auto-start
+                self.ensure_tray_running()
         else:
             if not self.service_control.disable():
                 self.show_error("Failed to disable service")
