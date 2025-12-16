@@ -12,6 +12,11 @@ smoothing_factor=0.3
 # Recommended: 1.0-3.0
 update_interval=2.0
 
+# Enable adaptive learning mode
+# Learns your brightness preferences in different lighting conditions
+# The system will remember manual brightness adjustments and automatically apply them in similar conditions
+adaptive_mode=true
+
 # Minimum brightness percentage (1-100)
 # Screen will never go below this level
 min_brightness=10
