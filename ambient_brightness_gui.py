@@ -504,11 +504,14 @@ class SettingsWindow(Gtk.Window):
         self.service_control = ServiceControl()
         self.status_monitor = StatusMonitor(self.service_control)
 
+        # Flag to prevent update_status() from interfering with user actions
+        self.user_action_in_progress = False
+
         # Build UI
         self.build_ui()
 
-        # Start status update timer
-        GLib.timeout_add_seconds(2, self.update_status)
+        # Start status update timer (increased to 5 seconds to reduce interference)
+        GLib.timeout_add_seconds(5, self.update_status)
         self.update_status()
 
     def build_ui(self):
@@ -743,14 +746,10 @@ class SettingsWindow(Gtk.Window):
         print(f"[DEBUG] Creating checkbox - initial state from is_enabled(): {initial_state}")
         self.enable_check.set_active(initial_state)
         print(f"[DEBUG] Checkbox set_active({initial_state}), actual state: {self.enable_check.get_active()}")
-        print(f"[DEBUG] Checkbox sensitive (enabled): {self.enable_check.get_sensitive()}")
 
         # Connect the toggled signal
         self.enable_check_signal_id = self.enable_check.connect("toggled", self.on_enable_toggled)
         print(f"[DEBUG] Signal connected with ID: {self.enable_check_signal_id}")
-
-        # Add a button-press-event handler to detect ANY clicks
-        self.enable_check.connect("button-press-event", self.on_checkbox_clicked)
 
         control_box.pack_start(self.enable_check, False, False, 5)
 
@@ -781,6 +780,11 @@ class SettingsWindow(Gtk.Window):
 
     def update_status(self):
         """Update status displays"""
+        # Skip checkbox update if user action is in progress
+        if self.user_action_in_progress:
+            print("[DEBUG] update_status() - skipping checkbox update (user action in progress)")
+            return True
+
         # Service status
         is_running = self.service_control.is_running()
         is_enabled = self.service_control.is_enabled()
@@ -808,7 +812,7 @@ class SettingsWindow(Gtk.Window):
         self.start_btn.set_sensitive(not is_running)
         self.stop_btn.set_sensitive(is_running)
 
-        # Update checkbox without triggering signal
+        # Update checkbox without triggering signal (only if not in user action)
         print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
 
         # Block the handler
@@ -950,12 +954,6 @@ class SettingsWindow(Gtk.Window):
         except Exception as e:
             print(f"Could not start tray icon: {e}")
 
-    def on_checkbox_clicked(self, widget, event):
-        """Debug handler to detect any clicks on the checkbox"""
-        print(f"[DEBUG] *** CHECKBOX CLICKED *** event type={event.type}, button={event.button}")
-        print(f"[DEBUG] Current checkbox state BEFORE click: {self.enable_check.get_active()}")
-        return False  # Allow event to propagate so toggled signal can fire
-
     def on_start_clicked(self, button):
         """Start service"""
         if self.service_control.start():
@@ -985,37 +983,42 @@ class SettingsWindow(Gtk.Window):
     def on_enable_toggled(self, button):
         """Toggle service enable at boot"""
         print(f"[DEBUG] on_enable_toggled() called, button.get_active() = {button.get_active()}")
-        if button.get_active():
-            # Enabling auto-start
-            print("[DEBUG] User checked the box - calling enable()")
-            if not self.service_control.enable():
-                print("[DEBUG] enable() failed!")
-                self.show_error("Failed to enable auto-start")
-                button.set_active(False)
-            else:
-                print("[DEBUG] enable() succeeded!")
-                # Auto-start tray icon immediately when enabling auto-start
-                self.ensure_tray_running()
-                self.show_message("Auto-start enabled. Tray icon started.")
-        else:
-            # Disabling auto-start
-            print("[DEBUG] User unchecked the box - calling disable()")
-            if not self.service_control.disable():
-                print("[DEBUG] disable() failed!")
-                self.show_error("Failed to disable auto-start")
-                button.set_active(True)
-            else:
-                print("[DEBUG] disable() succeeded!")
-                # Stop the tray icon when disabling auto-start
-                if self.is_tray_running():
-                    self.stop_tray()
-                    self.show_message("Auto-start disabled. Tray icon stopped.")
-                else:
-                    self.show_message("Auto-start disabled.")
 
-        # Update status display
-        print("[DEBUG] Calling update_status()")
-        self.update_status()
+        # Set flag to prevent update_status() from interfering
+        self.user_action_in_progress = True
+
+        try:
+            if button.get_active():
+                # Enabling auto-start
+                print("[DEBUG] User checked the box - calling enable()")
+                if not self.service_control.enable():
+                    print("[DEBUG] enable() failed!")
+                    self.show_error("Failed to enable auto-start")
+                    button.set_active(False)
+                else:
+                    print("[DEBUG] enable() succeeded!")
+                    # Auto-start tray icon immediately when enabling auto-start
+                    self.ensure_tray_running()
+                    self.show_message("Auto-start enabled. Tray icon started.")
+            else:
+                # Disabling auto-start
+                print("[DEBUG] User unchecked the box - calling disable()")
+                if not self.service_control.disable():
+                    print("[DEBUG] disable() failed!")
+                    self.show_error("Failed to disable auto-start")
+                    button.set_active(True)
+                else:
+                    print("[DEBUG] disable() succeeded!")
+                    # Stop the tray icon when disabling auto-start
+                    if self.is_tray_running():
+                        self.stop_tray()
+                        self.show_message("Auto-start disabled. Tray icon stopped.")
+                    else:
+                        self.show_message("Auto-start disabled.")
+        finally:
+            # Clear flag to allow update_status() to resume normal operation
+            self.user_action_in_progress = False
+            print("[DEBUG] user_action_in_progress cleared, next update_status() will proceed normally")
 
     def on_refresh_logs_clicked(self, button):
         """Refresh service logs"""
