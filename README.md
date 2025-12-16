@@ -47,6 +47,7 @@ After installation, here's where everything lives:
 
 ## Features
 
+- **Adaptive Learning**: Learns your brightness preferences in different lighting conditions and automatically applies them
 - **Graphical User Interface**: Full-featured GTK3 GUI with real-time monitoring and easy configuration
 - **System Tray Integration**: Quick access indicator with service control
 - **Dual Sensor Support**: Automatically uses ambient light sensor (ALS) if available, falls back to camera
@@ -73,6 +74,53 @@ After installation, here's where everything lives:
    - Bright (60-100%): Maximum brightness for outdoor visibility
 
 4. **Smooth Adjustment**: Applies exponential smoothing to prevent flickering
+
+5. **Adaptive Learning** (Optional, enabled by default):
+   - Detects when you manually adjust brightness
+   - Records your preference along with the current ambient light level
+   - Groups light levels into bins (5% increments) to build a preference map
+   - Automatically applies learned preferences in similar lighting conditions
+   - Uses weighted averaging with time decay (recent preferences count more)
+   - Falls back to default algorithm when no learned data is available
+   - Data stored in `~/.config/ambient-brightness/learning.json`
+
+## Adaptive Learning
+
+The adaptive learning feature allows the system to learn your personal brightness preferences over time.
+
+### How It Works
+
+1. **Manual Adjustment Detection**: When you manually change the screen brightness (using hardware keys or system settings), the service detects this change
+2. **Preference Recording**: Your adjustment is recorded along with the current ambient light level
+3. **Learning Over Time**: The system builds a profile of your preferences across different lighting conditions
+4. **Automatic Application**: In similar lighting conditions, your learned preferences are automatically applied instead of the default algorithm
+
+### Using Adaptive Learning
+
+**Via GUI (Recommended)**:
+1. Open the Settings tab in `ambient-brightness-gui`
+2. Check "Enable adaptive learning" (enabled by default)
+3. Click "View Statistics" to see what the system has learned
+4. Click "Clear Learned Data" to start fresh if needed
+
+**Via Config File**:
+Edit `~/.config/ambient-brightness/config.conf`:
+```ini
+# Enable adaptive learning
+adaptive_mode=true
+```
+
+### Tips for Best Results
+
+- Let the service run for a few days to build up learning data
+- Adjust brightness manually in different lighting conditions (morning, afternoon, evening, etc.)
+- The system needs at least 3 adjustments per light level to start using learned preferences
+- More recent adjustments have higher weight (preferences adapt to changing habits)
+- Each light level bin (5% ranges) is learned independently
+
+### Privacy Note
+
+All learning data is stored locally on your machine in `~/.config/ambient-brightness/learning.json`. No data is sent anywhere. You can view or delete this file at any time.
 
 ## Requirements
 
@@ -206,6 +254,7 @@ After installation, you can manage the service using the graphical interface:
 - Hardware information (backlight device)
 
 **Settings Tab**:
+- Enable/disable adaptive learning with statistics and data management
 - Enable/disable camera fallback sensor
 - Adjust smoothing factor (how fast brightness changes)
 - Set update interval (how often to check sensor)
@@ -302,6 +351,10 @@ smoothing_factor=0.3
 
 # Update interval in seconds
 update_interval=2.0
+
+# Enable adaptive learning (true/false)
+# Learns your brightness preferences in different lighting conditions
+adaptive_mode=true
 
 # Minimum brightness percentage (1-100)
 min_brightness=10

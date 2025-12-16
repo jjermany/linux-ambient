@@ -9,8 +9,11 @@ import sys
 import time
 import glob
 import logging
+import json
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, List
+from datetime import datetime
+from collections import defaultdict
 import signal
 
 # Setup logging
@@ -276,15 +279,227 @@ class BrightnessController:
         return self.demo_mode or self.backlight_path is not None
 
 
+class AdaptiveLearning:
+    """
+    Adaptive learning system that learns user brightness preferences
+    based on ambient light conditions.
+    """
+
+    def __init__(self, data_file: Path):
+        self.data_file = data_file
+        self.bin_size = 5  # Light level bin size (5% increments)
+        self.learning_data = self._load_data()
+        self.last_save_time = time.time()
+        self.save_interval = 60  # Save every 60 seconds
+        self.confidence_threshold = 3  # Minimum samples needed to use learned data
+
+    def _load_data(self) -> Dict:
+        """Load learning data from file"""
+        if self.data_file.exists():
+            try:
+                with open(self.data_file, 'r') as f:
+                    data = json.load(f)
+                    logger.info(f"Loaded adaptive learning data: {len(data.get('bins', {}))} light level bins")
+                    return data
+            except Exception as e:
+                logger.error(f"Error loading learning data: {e}")
+
+        # Initialize empty structure
+        return {
+            'version': 1,
+            'bins': {},  # light_bin -> list of {brightness, timestamp, weight}
+            'metadata': {
+                'created': datetime.now().isoformat(),
+                'total_samples': 0
+            }
+        }
+
+    def _save_data(self):
+        """Save learning data to file"""
+        try:
+            # Ensure directory exists
+            self.data_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Update metadata
+            total_samples = sum(len(samples) for samples in self.learning_data['bins'].values())
+            self.learning_data['metadata']['total_samples'] = total_samples
+            self.learning_data['metadata']['last_updated'] = datetime.now().isoformat()
+
+            # Write to file
+            with open(self.data_file, 'w') as f:
+                json.dump(self.learning_data, f, indent=2)
+
+            self.last_save_time = time.time()
+            logger.debug(f"Saved learning data: {total_samples} total samples")
+
+        except Exception as e:
+            logger.error(f"Error saving learning data: {e}")
+
+    def _get_bin(self, light_level: float) -> str:
+        """Get bin key for a light level"""
+        bin_index = int(light_level / self.bin_size) * self.bin_size
+        return f"{bin_index}-{bin_index + self.bin_size}"
+
+    def record_preference(self, light_level: float, brightness: int):
+        """Record a user brightness preference for a given light level"""
+        if light_level is None or brightness is None:
+            return
+
+        bin_key = self._get_bin(light_level)
+
+        # Initialize bin if it doesn't exist
+        if bin_key not in self.learning_data['bins']:
+            self.learning_data['bins'][bin_key] = []
+
+        # Add sample
+        sample = {
+            'brightness': brightness,
+            'timestamp': datetime.now().isoformat(),
+            'light_level': round(light_level, 2)
+        }
+
+        self.learning_data['bins'][bin_key].append(sample)
+
+        # Keep only recent samples (last 100 per bin to prevent unbounded growth)
+        if len(self.learning_data['bins'][bin_key]) > 100:
+            self.learning_data['bins'][bin_key] = self.learning_data['bins'][bin_key][-100:]
+
+        logger.info(f"Learned preference: Light {light_level:.1f}% -> Brightness {brightness}% (bin: {bin_key})")
+
+        # Save periodically
+        if time.time() - self.last_save_time >= self.save_interval:
+            self._save_data()
+
+    def get_learned_brightness(self, light_level: float) -> Optional[int]:
+        """
+        Get learned brightness preference for a light level.
+        Returns None if insufficient data.
+        """
+        if light_level is None:
+            return None
+
+        bin_key = self._get_bin(light_level)
+
+        # Check if we have data for this bin
+        if bin_key not in self.learning_data['bins']:
+            return None
+
+        samples = self.learning_data['bins'][bin_key]
+
+        # Need minimum confidence
+        if len(samples) < self.confidence_threshold:
+            return None
+
+        # Calculate weighted average (more recent samples have higher weight)
+        total_weight = 0
+        weighted_sum = 0
+
+        now = datetime.now()
+
+        for i, sample in enumerate(samples):
+            # Recent samples get more weight
+            # Weight decreases exponentially with age
+            try:
+                sample_time = datetime.fromisoformat(sample['timestamp'])
+                age_hours = (now - sample_time).total_seconds() / 3600
+
+                # Exponential decay: weight = e^(-age/decay_time)
+                # decay_time = 168 hours (1 week) -> half-life ~5 days
+                decay_time = 168
+                weight = 2.71828 ** (-age_hours / decay_time)
+
+                # Also give more weight to recent samples in the list
+                recency_weight = (i + 1) / len(samples)  # 0.01 to 1.0
+                weight *= (0.5 + 0.5 * recency_weight)
+
+            except:
+                weight = 1.0
+
+            weighted_sum += sample['brightness'] * weight
+            total_weight += weight
+
+        if total_weight > 0:
+            learned_brightness = int(weighted_sum / total_weight)
+            logger.debug(f"Learned brightness for {light_level:.1f}%: {learned_brightness}% ({len(samples)} samples)")
+            return learned_brightness
+
+        return None
+
+    def get_confidence(self, light_level: float) -> float:
+        """Get confidence level (0-1) for a light level"""
+        if light_level is None:
+            return 0.0
+
+        bin_key = self._get_bin(light_level)
+
+        if bin_key not in self.learning_data['bins']:
+            return 0.0
+
+        sample_count = len(self.learning_data['bins'][bin_key])
+
+        # Confidence increases with sample count, capped at 1.0
+        # 3 samples = 0.3, 10 samples = 1.0
+        confidence = min(1.0, sample_count / 10.0)
+
+        return confidence
+
+    def clear_data(self):
+        """Clear all learned data"""
+        self.learning_data = {
+            'version': 1,
+            'bins': {},
+            'metadata': {
+                'created': datetime.now().isoformat(),
+                'total_samples': 0
+            }
+        }
+        self._save_data()
+        logger.info("Cleared all adaptive learning data")
+
+    def get_statistics(self) -> Dict:
+        """Get learning statistics"""
+        total_samples = sum(len(samples) for samples in self.learning_data['bins'].values())
+        bin_count = len(self.learning_data['bins'])
+
+        # Find bins with most samples
+        top_bins = []
+        for bin_key, samples in self.learning_data['bins'].items():
+            if samples:
+                avg_brightness = sum(s['brightness'] for s in samples) / len(samples)
+                top_bins.append({
+                    'bin': bin_key,
+                    'samples': len(samples),
+                    'avg_brightness': round(avg_brightness, 1)
+                })
+
+        top_bins.sort(key=lambda x: x['samples'], reverse=True)
+
+        return {
+            'total_samples': total_samples,
+            'bin_count': bin_count,
+            'top_bins': top_bins[:5],
+            'created': self.learning_data['metadata'].get('created'),
+            'last_updated': self.learning_data['metadata'].get('last_updated')
+        }
+
+    def force_save(self):
+        """Force save data immediately"""
+        self._save_data()
+
+
 class BrightnessAdapter:
     """Adaptive brightness controller with smoothing"""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, adaptive_learning: Optional['AdaptiveLearning'] = None):
         self.config = config
         self.smoothing_factor = config.get('smoothing_factor', 0.3)
         self.update_interval = config.get('update_interval', 2.0)
         self.min_brightness = config.get('min_brightness', 10)
         self.max_brightness = config.get('max_brightness', 100)
+        self.adaptive_mode = config.get('adaptive_mode', True)
+
+        # Adaptive learning
+        self.adaptive_learning = adaptive_learning
 
         # State
         self.current_target = None
@@ -297,11 +512,21 @@ class BrightnessAdapter:
         self.update_interval = config.get('update_interval', 2.0)
         self.min_brightness = config.get('min_brightness', 10)
         self.max_brightness = config.get('max_brightness', 100)
-        logger.info(f"Configuration reloaded: smoothing={self.smoothing_factor}, interval={self.update_interval}s, brightness={self.min_brightness}-{self.max_brightness}%")
+        self.adaptive_mode = config.get('adaptive_mode', True)
+        logger.info(f"Configuration reloaded: smoothing={self.smoothing_factor}, interval={self.update_interval}s, brightness={self.min_brightness}-{self.max_brightness}%, adaptive={self.adaptive_mode}")
 
     def map_light_to_brightness(self, light_level: float) -> int:
         """Map light level (0-100) to brightness (0-100)"""
 
+        # Try to use learned preferences if adaptive mode is enabled
+        if self.adaptive_mode and self.adaptive_learning:
+            learned_brightness = self.adaptive_learning.get_learned_brightness(light_level)
+            if learned_brightness is not None:
+                confidence = self.adaptive_learning.get_confidence(light_level)
+                logger.debug(f"Using learned brightness: {learned_brightness}% (confidence: {confidence:.2f})")
+                return learned_brightness
+
+        # Fall back to default algorithm if no learned data
         # Non-linear mapping: darker environments need relatively higher brightness
         # Light: 0-20 -> Brightness: 10-40
         # Light: 20-60 -> Brightness: 40-75
@@ -358,7 +583,13 @@ class AmbientBrightnessService:
             self.demo_mode = True
 
         self.brightness_controller = BrightnessController(demo_mode=self.demo_mode)
-        self.adapter = BrightnessAdapter(config)
+
+        # Initialize adaptive learning
+        learning_file = Path.home() / '.config' / 'ambient-brightness' / 'learning.json'
+        self.adaptive_learning = AdaptiveLearning(learning_file)
+
+        # Initialize adapter with adaptive learning
+        self.adapter = BrightnessAdapter(config, adaptive_learning=self.adaptive_learning)
 
         # Select sensor
         self.sensor = None
@@ -406,6 +637,8 @@ class AmbientBrightnessService:
         logger.info("Ambient brightness service started")
 
         current_brightness = self.brightness_controller.get_current_brightness()
+        last_set_brightness = current_brightness
+        last_light_level = None
 
         try:
             while self.running:
@@ -413,6 +646,18 @@ class AmbientBrightnessService:
                 light_level = self.sensor.read_light_level()
 
                 if light_level is not None:
+                    # Check for manual brightness adjustment by user
+                    actual_brightness = self.brightness_controller.get_current_brightness()
+                    if (last_set_brightness is not None and
+                        actual_brightness is not None and
+                        abs(actual_brightness - last_set_brightness) >= 3 and
+                        last_light_level is not None):
+                        # User manually adjusted brightness - record this preference!
+                        logger.info(f"Manual adjustment detected: {last_set_brightness}% -> {actual_brightness}% at light level {last_light_level:.1f}%")
+                        self.adaptive_learning.record_preference(last_light_level, actual_brightness)
+                        current_brightness = actual_brightness
+                        last_set_brightness = actual_brightness
+
                     # Map to target brightness
                     target_brightness = self.adapter.map_light_to_brightness(light_level)
 
@@ -424,6 +669,9 @@ class AmbientBrightnessService:
                         if self.brightness_controller.set_brightness(smooth_brightness):
                             logger.info(f"Light: {light_level:.1f}% -> Brightness: {smooth_brightness}%")
                             current_brightness = smooth_brightness
+                            last_set_brightness = smooth_brightness
+
+                    last_light_level = light_level
 
                 # Sleep until next update
                 time.sleep(self.adapter.update_interval)
@@ -441,6 +689,9 @@ class AmbientBrightnessService:
         """Cleanup resources"""
         if self.camera_sensor:
             self.camera_sensor.cleanup()
+        # Save adaptive learning data
+        if self.adaptive_learning:
+            self.adaptive_learning.force_save()
         logger.info("Service stopped")
 
 
@@ -453,6 +704,7 @@ def load_config() -> dict:
         'update_interval': 2.0,
         'min_brightness': 10,
         'max_brightness': 100,
+        'adaptive_mode': True,
     }
 
     # Load from user config file if exists
@@ -469,7 +721,7 @@ def load_config() -> dict:
                         value = value.strip()
 
                         # Type conversion
-                        if key in ['enable_camera']:
+                        if key in ['enable_camera', 'adaptive_mode']:
                             config[key] = value.lower() in ['true', '1', 'yes']
                         elif key in ['smoothing_factor', 'update_interval']:
                             config[key] = float(value)

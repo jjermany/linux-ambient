@@ -674,6 +674,34 @@ class SettingsWindow(Gtk.Window):
         self.interval_scale.set_hexpand(True)
         behavior_grid.attach(self.interval_scale, 1, row, 1, 1)
 
+        # Adaptive Learning settings
+        adaptive_frame = Gtk.Frame(label="Adaptive Learning")
+        adaptive_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        adaptive_box.set_border_width(10)
+        adaptive_frame.add(adaptive_box)
+        box.pack_start(adaptive_frame, False, False, 0)
+
+        self.adaptive_check = Gtk.CheckButton(label="Enable adaptive learning")
+        self.adaptive_check.set_active(self.config.get('adaptive_mode', True))
+        adaptive_box.pack_start(self.adaptive_check, False, False, 0)
+
+        adaptive_hint = Gtk.Label()
+        adaptive_hint.set_markup("<small>Learns your brightness preferences in different lighting conditions</small>")
+        adaptive_hint.set_xalign(0)
+        adaptive_box.pack_start(adaptive_hint, False, False, 0)
+
+        # Adaptive learning action buttons
+        adaptive_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        adaptive_box.pack_start(adaptive_button_box, False, False, 5)
+
+        stats_btn = Gtk.Button(label="View Statistics")
+        stats_btn.connect("clicked", self.on_view_stats_clicked)
+        adaptive_button_box.pack_start(stats_btn, False, False, 0)
+
+        clear_btn = Gtk.Button(label="Clear Learned Data")
+        clear_btn.connect("clicked", self.on_clear_learning_clicked)
+        adaptive_button_box.pack_start(clear_btn, False, False, 0)
+
         # Brightness limits
         limits_frame = Gtk.Frame(label="Brightness Limits")
         limits_grid = Gtk.Grid()
@@ -857,6 +885,7 @@ class SettingsWindow(Gtk.Window):
         self.config['update_interval'] = self.interval_scale.get_value()
         self.config['min_brightness'] = int(self.min_brightness_scale.get_value())
         self.config['max_brightness'] = int(self.max_brightness_scale.get_value())
+        self.config['adaptive_mode'] = self.adaptive_check.get_active()
 
         # Get GUI settings
         old_tray_setting = self.gui_config.get('show_system_tray', False)
@@ -925,6 +954,115 @@ class SettingsWindow(Gtk.Window):
             dialog.format_secondary_text(msg)
             dialog.run()
             dialog.destroy()
+
+    def on_view_stats_clicked(self, button):
+        """Show adaptive learning statistics"""
+        try:
+            # Import the ambient_brightness module to access AdaptiveLearning
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent))
+            from ambient_brightness import AdaptiveLearning
+
+            # Load learning data
+            learning_file = Path.home() / '.config' / 'ambient-brightness' / 'learning.json'
+            adaptive_learning = AdaptiveLearning(learning_file)
+            stats = adaptive_learning.get_statistics()
+
+            # Build stats message
+            if stats['total_samples'] == 0:
+                message = "No learning data collected yet.\n\nThe system will learn your brightness preferences as you manually adjust brightness in different lighting conditions."
+            else:
+                message = f"Total samples: {stats['total_samples']}\n"
+                message += f"Light level bins: {stats['bin_count']}\n\n"
+
+                if stats['top_bins']:
+                    message += "Top learned preferences:\n"
+                    for bin_data in stats['top_bins']:
+                        message += f"  Light {bin_data['bin']}%: {bin_data['avg_brightness']}% brightness ({bin_data['samples']} samples)\n"
+
+                if stats.get('created'):
+                    message += f"\nCreated: {stats['created'][:10]}"
+                if stats.get('last_updated'):
+                    message += f"\nLast updated: {stats['last_updated'][:10]}"
+
+            # Show dialog
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="Adaptive Learning Statistics"
+            )
+            dialog.format_secondary_text(message)
+            dialog.run()
+            dialog.destroy()
+
+        except Exception as e:
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Error Loading Statistics"
+            )
+            dialog.format_secondary_text(f"Failed to load learning statistics: {str(e)}")
+            dialog.run()
+            dialog.destroy()
+
+    def on_clear_learning_clicked(self, button):
+        """Clear all adaptive learning data"""
+        # Confirmation dialog
+        confirm_dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Clear Adaptive Learning Data?"
+        )
+        confirm_dialog.format_secondary_text(
+            "This will permanently delete all learned brightness preferences.\n\n"
+            "The system will start learning from scratch. This action cannot be undone."
+        )
+
+        response = confirm_dialog.run()
+        confirm_dialog.destroy()
+
+        if response == Gtk.ResponseType.YES:
+            try:
+                # Import and clear learning data
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).parent))
+                from ambient_brightness import AdaptiveLearning
+
+                learning_file = Path.home() / '.config' / 'ambient-brightness' / 'learning.json'
+                adaptive_learning = AdaptiveLearning(learning_file)
+                adaptive_learning.clear_data()
+
+                # Success dialog
+                dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.INFO,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Learning Data Cleared"
+                )
+                dialog.format_secondary_text("All adaptive learning data has been cleared successfully.")
+                dialog.run()
+                dialog.destroy()
+
+            except Exception as e:
+                dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Error Clearing Data"
+                )
+                dialog.format_secondary_text(f"Failed to clear learning data: {str(e)}")
+                dialog.run()
+                dialog.destroy()
 
     def is_tray_running(self) -> bool:
         """Check if tray icon is running"""
