@@ -620,7 +620,10 @@ class SettingsWindow(Gtk.Window):
         box.pack_start(gui_frame, False, False, 0)
 
         self.tray_check = Gtk.CheckButton(label="Show system tray icon")
-        self.tray_check.set_active(self.gui_config['show_system_tray'])
+        # Check if tray is actually running, not just the config value
+        self.tray_check.set_active(self.is_tray_running())
+        # Connect signal to immediately start/stop tray when toggled
+        self.tray_check_signal_id = self.tray_check.connect("toggled", self.on_tray_toggled)
         gui_box.pack_start(self.tray_check, False, False, 0)
 
         tray_hint = Gtk.Label()
@@ -812,7 +815,7 @@ class SettingsWindow(Gtk.Window):
         self.start_btn.set_sensitive(not is_running)
         self.stop_btn.set_sensitive(is_running)
 
-        # Update checkbox without triggering signal (only if not in user action)
+        # Update "Start automatically at boot" checkbox without triggering signal
         print(f"[DEBUG] update_status() - is_enabled={is_enabled}, checkbox currently={self.enable_check.get_active()}")
 
         # Block the handler
@@ -826,6 +829,14 @@ class SettingsWindow(Gtk.Window):
         # Unblock the handler
         self.enable_check.handler_unblock(self.enable_check_signal_id)
         print(f"[DEBUG] update_status() - handler unblocked (signal ID: {self.enable_check_signal_id})")
+
+        # Update "Show system tray icon" checkbox to reflect actual tray state
+        tray_is_running = self.is_tray_running()
+        if self.tray_check.get_active() != tray_is_running:
+            self.tray_check.handler_block(self.tray_check_signal_id)
+            self.tray_check.set_active(tray_is_running)
+            self.tray_check.handler_unblock(self.tray_check_signal_id)
+            print(f"[DEBUG] update_status() - tray checkbox updated to {tray_is_running}")
 
         # Get sensor readings
         if is_running:
@@ -954,12 +965,40 @@ class SettingsWindow(Gtk.Window):
         except Exception as e:
             print(f"Could not start tray icon: {e}")
 
+    def on_tray_toggled(self, button):
+        """Handle Show system tray icon checkbox toggle"""
+        print(f"[DEBUG] on_tray_toggled() called, button.get_active() = {button.get_active()}")
+
+        # Set flag to prevent update_status() from interfering
+        self.user_action_in_progress = True
+
+        try:
+            if button.get_active():
+                # Start tray icon
+                print("[DEBUG] Starting tray icon")
+                self.ensure_tray_running()
+                # Save preference
+                self.gui_config['show_system_tray'] = True
+                ConfigManager.save_gui_config(self.gui_config)
+            else:
+                # Stop tray icon
+                print("[DEBUG] Stopping tray icon")
+                self.stop_tray()
+                # Save preference
+                self.gui_config['show_system_tray'] = False
+                ConfigManager.save_gui_config(self.gui_config)
+        finally:
+            # Clear flag
+            self.user_action_in_progress = False
+            print("[DEBUG] on_tray_toggled() completed")
+
     def on_start_clicked(self, button):
         """Start service"""
         if self.service_control.start():
             self.show_message("Service started successfully")
-            # Auto-start tray icon when service is started
-            self.ensure_tray_running()
+            # Auto-start tray icon when service is started if user wants it
+            if self.gui_config.get('show_system_tray', False):
+                self.ensure_tray_running()
         else:
             self.show_error("Failed to start service")
         self.update_status()
